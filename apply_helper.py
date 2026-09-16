@@ -10,9 +10,14 @@ autofill isn't reliable. Treat this as "saves you the repetitive typing",
 not "fully automatic."
 
 Usage:
-    python apply_helper.py <job_url> <path_to_tailored_resume.docx>
+    python apply_helper.py <job_url> [path_to_tailored_resume.docx]
+
+    The resume path is optional: without it, text fields still get
+    prefilled but no file is uploaded.
 """
 import sys
+import time
+
 import yaml
 from playwright.sync_api import sync_playwright
 
@@ -59,6 +64,8 @@ def try_fill(page, contact: dict, resume_path: str):
 
         if input_type == "file":
             if any(h in label_text for h in ["resume", "cv"]):
+                if not resume_path:
+                    continue
                 try:
                     el.set_input_files(resume_path)
                     filled.append(f"resume upload -> {label_text}")
@@ -88,7 +95,7 @@ def try_fill(page, contact: dict, resume_path: str):
     return filled
 
 
-def main(job_url: str, resume_path: str):
+def main(job_url: str, resume_path: str = ""):
     bank = load_resume_bank()
     contact = bank.get("contact", {})
 
@@ -110,13 +117,20 @@ def main(job_url: str, resume_path: str):
             print("   (form may be behind a click, e.g. an 'Apply' button -- click it, then re-run)")
 
         print("\n[apply_helper] Browser left open for you to review and submit manually.")
-        print("Press Enter here when you're done with this tab...")
-        input()
-        browser.close()
+        if sys.stdin.isatty():
+            print("Press Enter here when you're done with this tab...")
+            input()
+            browser.close()
+        else:
+            print("[apply_helper] subprocess mode -- close the browser window when done.")
+            while browser.is_connected():
+                time.sleep(2)
+            print("[apply_helper] browser closed.")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python apply_helper.py <job_url> <path_to_tailored_resume.docx>")
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Usage: python apply_helper.py <job_url> [path_to_tailored_resume.docx]")
         sys.exit(1)
-    main(sys.argv[1], sys.argv[2])
+    resume = sys.argv[2] if len(sys.argv) == 3 else ""
+    main(sys.argv[1], resume)
