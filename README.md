@@ -1,9 +1,10 @@
 # Job Search Scraper + Tracker
 
-Scrape-only pipeline: scrapes Indeed and LinkedIn for junior/entry-level
-roles in Metro Manila, applies keyword + years-of-experience filters,
-dedupes against everything already seen, and appends only the new leads to
-`applications.xlsx`. No LLM APIs, no keys, nothing to budget.
+Scrape-only pipeline: scrapes Indeed, LinkedIn, and JobStreet for
+junior/entry-level roles in Metro Manila, applies keyword +
+years-of-experience filters, dedupes against everything already seen, and
+appends only the new leads to `applications.xlsx`. No LLM APIs, no keys,
+nothing to budget.
 
 ## 1. Setup
 
@@ -11,7 +12,7 @@ dedupes against everything already seen, and appends only the new leads to
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium   # only needed for apply_helper.py's browser
+playwright install chromium   # needed for JobStreet scraping + apply_helper.py
 ```
 
 No `.env`, no API keys.
@@ -31,7 +32,10 @@ Edit `config.yaml` only:
   experience"). Postings with no stated requirement are kept.
 - `search.exclude_title_keywords` — prefix/seniority terms dropped by title.
 - `search.exclude_company_keywords` — companies to drop by name.
-- `search.site_names` — which boards to scrape (`indeed`, `linkedin`).
+- `search.site_names` — which boards to scrape (`indeed`, `linkedin`,
+  `jobstreet`). JobStreet is not supported by jobspy, so it is scraped by
+  `jobstreet.py` through a headless Chromium (the same Playwright browser
+  installed above). It ignores the `", Philippines"` suffix on `location`.
 
 ## 3. Run it
 

@@ -1,12 +1,17 @@
 """
 Scrapes job postings across configured sites/terms using python-jobspy,
 applies keyword + experience filters, and returns a deduplicated DataFrame.
+
+JobStreet is not supported by jobspy, so it is handled separately by
+jobstreet.py (headless Chromium); this module merges its results in.
 """
 import re
 
 import yaml
 import pandas as pd
 from jobspy import scrape_jobs
+
+import jobstreet
 
 
 def load_config(path="config.yaml"):
@@ -73,11 +78,19 @@ def scrape(cfg: dict) -> pd.DataFrame:
     s = cfg["search"]
     all_frames = []
 
-    for term in s["search_terms"]:
+    # jobspy only knows its own providers; JobStreet is scraped by jobstreet.py.
+    sites = s.get("site_names", ["indeed", "linkedin"])
+    jobspy_sites = [x for x in sites if x != "jobstreet"]
+    use_jobstreet = "jobstreet" in sites
+    terms = s["search_terms"]
+
+    for term in terms:
+        if not jobspy_sites:
+            break
         print(f"[scraper] searching: '{term}' in {s['location']}")
 
         kwargs = dict(
-            site_name=s["site_names"],
+            site_name=jobspy_sites,
             search_term=term,
             location=s["location"],
             results_wanted=s.get("results_wanted", 50),
@@ -103,6 +116,20 @@ def scrape(cfg: dict) -> pd.DataFrame:
         if df is not None and not df.empty:
             df["matched_search_term"] = term
             all_frames.append(df)
+
+    if use_jobstreet:
+        try:
+            js_df = jobstreet.scrape_jobstreet(
+                terms,
+                s["location"],
+                max_results=s.get("results_wanted", 50),
+                hours_old=s.get("hours_old"),
+            )
+        except Exception as e:
+            print(f"[scraper] WARNING: jobstreet scrape failed: {e}")
+            js_df = None
+        if js_df is not None and not js_df.empty:
+            all_frames.append(js_df)
 
     if not all_frames:
         return pd.DataFrame()

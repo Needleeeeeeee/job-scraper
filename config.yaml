@@ -43,6 +43,7 @@ search:
   site_names:
     - "indeed"
     - "linkedin"
+    - "jobstreet"
 
   # How far back to look
   hours_old: 72
