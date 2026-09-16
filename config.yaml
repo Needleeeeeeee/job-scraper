@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------
+# EDIT THIS FILE to set what jobs you want. Nothing else to touch
+# to change search criteria.
+# ---------------------------------------------------------------
+
+search:
+  # Keywords / job titles to search for (jobspy runs one search per term).
+  # Keep them junior/entry-level friendly -- the experience filter below
+  # drops anything that explicitly asks for more than ~2 years.
+  search_terms:
+    - "Junior Developer"
+    - "Junior Fullstack Developer"
+    - "Entry Level Developer"
+    - "Junior Software Engineer"
+    - "Associate Software Engineer"
+    - "Junior Python Developer"
+    - "Junior Web Developer"
+    - "Junior Backend Developer"
+    - "Junior QA Engineer"
+    - "Software Engineer Trainee"
+    - "Fresh Graduate IT"
+    - "IT Support Specialist"
+
+  # Location string as you'd type it into a job board. Kept tied to
+  # Metro Manila + the Philippines Indeed domain so results stay local.
+  location: "Metro Manila, Philippines"
+
+  # true = only remote postings. You want onsite/hybrid, so this stays false --
+  # jobspy has no separate "hybrid" filter. IMPORTANT: jobspy's Indeed
+  # integration rejects combining is_remote with hours_old in one search
+  # (400 error) -- see scraper.py, which only passes is_remote through when
+  # it's explicitly true (a remote-only search).
+  is_remote: false
+
+  # REQUIRED for Indeed/Glassdoor -- jobspy defaults this to 'USA' if unset,
+  # which will 400 or silently search the wrong country. Must match jobspy's
+  # exact spelling; see https://github.com/speedyapply/JobSpy for the list.
+  country_indeed: "Philippines"
+
+  # ZipRecruiter and Glassdoor have little/no real coverage outside
+  # US/Canada for a Metro Manila search -- dropped. Indeed has strong PH
+  # coverage; LinkedIn works globally too.
+  site_names:
+    - "indeed"
+    - "linkedin"
+
+  # How far back to look
+  hours_old: 72
+
+  # Max results pulled per search term per job board
+  results_wanted: 50
+
+  # LinkedIn listings don't include the description until jobspy visits each
+  # posting. Keep this true or descriptions come back empty and the
+  # experience-requirement filter below has nothing to work with.
+  linkedin_fetch_description: true
+
+  # Experience ceiling: a posting that EXPLICITLY requires more than this
+  # many years (parsed from the description, e.g. "3-5 years experience") is
+  # dropped. Postings that don't state any requirement are kept.
+  max_experience_years: 2
+
+  # Case-insensitive substring match against the job title, applied before
+  # the years filter. Anything matching is dropped.
+  exclude_title_keywords:
+    - "intern"
+    - "unpaid"
+    - "seminar"
+    - "senior"
+    - "lead"
+    - "principal"
+    - "staff"
+    - "manager"
+    - "director"
+
+  exclude_company_keywords: []
+
+# Greenhouse / Lever company boards to check directly (no scraping fragility).
+# Add company board slugs here, e.g. Greenhouse: "https://boards.greenhouse.io/<slug>"
+company_boards:
+  greenhouse: []
+  lever: []
+
+# Local output file -- one row per NEW job, appended across runs.
+# Existing rows are preserved; re-scraped jobs are skipped as duplicates.
+paths:
+  tracker_sheet: "applications.xlsx"
+  # One-line summary of every finished run (written by main.py). The
+  # notification daemon tails this and pops a desktop notification.
+  runs_log: "runs.log"
