@@ -37,6 +37,9 @@ els => els.map(a => {
 """
 
 
+from locations import is_metro_manila
+
+
 def _where_for_jobstreet(location: str) -> str:
     """JobStreet's `where` resolver chokes on the full ", Philippines" suffix
     (it returns zero results), so search on the bare locality instead."""
@@ -154,6 +157,8 @@ class JobStreetScraper:
                 if not key or key in seen:
                     continue
                 if hours_old and _relative_hours(c.get("listed", "")) > hours_old:
+                    continue
+                if not is_metro_manila(c.get("location", "")):
                     continue
                 seen.add(key)
                 fresh += 1

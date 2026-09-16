@@ -25,6 +25,12 @@ Edit `config.yaml` only:
   `results_wanted` per board). Keep them junior/entry-level friendly.
 - `search.location` — default `"Metro Manila, Philippines"`; combined with
   `search.country_indeed: "Philippines"` this keeps results local.
+- **Strict location gating (always on):** after scraping, every row is
+  checked against a Metro Manila / National Capital Region whitelist
+  (16 cities + Pateros + NCR markers; see `locations.py`). Any posting whose
+  location is explicitly outside the NCR — Cebu, Davao, Iloilo, Bacolod,
+  Cavite, Clark, Angeles, Baguio, etc. — is dropped no matter what the
+  search itself returns. Postings with no location at all are kept.
 - `search.results_wanted` — max per search term per job board (default 50).
 - `search.hours_old` — how far back to look (default 72h).
 - `search.max_experience_years` — a posting that *explicitly* requires more

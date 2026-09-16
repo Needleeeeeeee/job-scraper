@@ -16,13 +16,15 @@ search:
     - "Junior Python Developer"
     - "Junior Web Developer"
     - "Junior Backend Developer"
-    - "Junior QA Engineer"
     - "Software Engineer Trainee"
     - "Fresh Graduate IT"
     - "IT Support Specialist"
 
   # Location string as you'd type it into a job board. Kept tied to
   # Metro Manila + the Philippines Indeed domain so results stay local.
+  # NOTE: results are STRICTLY filtered after scraping -- any posting whose
+  # location field is outside Metro Manila/NCR (e.g. Cebu, Davao, Cavite,
+  # Clark) is dropped regardless of what the search returns (see locations.py).
   location: "Metro Manila, Philippines"
 
   # true = only remote postings. You want onsite/hybrid, so this stays false --
@@ -46,7 +48,7 @@ search:
     - "jobstreet"
 
   # How far back to look
-  hours_old: 72
+  hours_old: 672
 
   # Max results pulled per search term per job board
   results_wanted: 50

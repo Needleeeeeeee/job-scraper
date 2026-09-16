@@ -12,6 +12,7 @@ import pandas as pd
 from jobspy import scrape_jobs
 
 import jobstreet
+from locations import is_metro_manila
 
 
 def load_config(path="config.yaml"):
@@ -180,6 +181,8 @@ def apply_keyword_filters(df: pd.DataFrame, s: dict) -> pd.DataFrame:
         return req is None or req <= cap
 
     mask = df["title"].apply(title_ok) & df["company"].apply(company_ok)
+    if "location" in df.columns:
+        mask = mask & df["location"].apply(is_metro_manila)
     if "description" in df.columns:
         mask = mask & df["description"].apply(experience_ok)
     return df[mask]
