@@ -1,0 +1,42 @@
+"""
+FastAPI app for the job-scraper dashboard.
+
+Local-only, single-user API over the same Postgres DB the scraper writes to.
+CORS is limited to localhost dev origins -- no auth needed for this tool.
+"""
+import sys
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from api.routes import apply, jobs, stats  # noqa: E402
+
+app = FastAPI(title="Job Scraper API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+app.include_router(apply.router, prefix="/jobs", tags=["apply"])
+app.include_router(stats.router, tags=["jobs"])
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
