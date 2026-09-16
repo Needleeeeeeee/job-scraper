@@ -61,4 +61,4 @@ def trigger_apply(job_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"could not start apply_helper: {e}")
 
-    return {"ok": True, "job_id": job_id, "pid": proc.pid, "url": url}
+    return {"ok": True, "job_id": job_id, "url": url}
