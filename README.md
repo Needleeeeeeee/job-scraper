@@ -1,115 +1,120 @@
-# Job Search Scraper + Tracker
+# Job Search Scraper + Dashboard
 
-Scrape-only pipeline: scrapes Indeed, LinkedIn, and JobStreet for
-junior/entry-level roles in Metro Manila, applies keyword +
-years-of-experience filters, dedupes against everything already seen, and
-appends only the new leads to `applications.xlsx`. No LLM APIs, no keys,
-nothing to budget.
+Scrape pipeline + local web dashboard: scrapes Indeed, LinkedIn, and JobStreet
+for junior/entry-level roles in Metro Manila, applies keyword +
+years-of-experience filters, dedupes, and stores new leads in **Postgres**.
+A **FastAPI** backend + **React/Tailwind** dashboard let you review and apply
+to postings from a browser tab.
 
-## 1. Setup
+- New leads land in `jobs` (Postgres) with `status: NEW`; re-runs never
+  duplicate rows.
+- The dashboard lists postings, filters by status/source/date/text, and has an
+  **Apply** button per row that opens a real browser via `apply_helper.py`.
+- `applications.xlsx` support is kept behind `--legacy-xlsx` until you've
+  confirmed the Postgres path on a few real runs.
+
+## 1. Architecture
+
+```
+venv/bin/python main.py          scrape -> Postgres (jobs, scrape_runs)
+venv/bin/uvicorn api.main:app     FastAPI on :8000 (GET /jobs, PATCH, POST /jobs/{id}/apply, /stats, /runs/latest)
+dashboard/                        Vite + React + Tailwind dev server on :5173
+run_and_open.sh                   scrape, ensure both servers, open the dashboard
+apply_helper.py                   opens a job URL in a real browser and prefills form fields
+notifier.py                       tails runs.log -> desktop notification (unchanged)
+```
+
+## 2. Setup
 
 ```bash
+# Postgres (native, no Docker)
+sudo pacman -S postgresql              # Arch/Omarchy
+sudo -u postgres initdb -D /var/lib/postgres/data
+sudo systemctl enable --now postgresql
+sudo -u postgres psql -c "CREATE ROLE <your_os_username> LOGIN SUPERUSER;"   # your OS user
+createdb job_scraper
+psql -d job_scraper -f schema.sql      # creates jobs + scrape_runs
+
+# Python deps
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium   # needed for JobStreet scraping + apply_helper.py
+playwright install chromium            # JobStreet scraping + apply_helper.py
+
+# Dashboard deps
+cd dashboard && npm install && cd ..
 ```
 
-No `.env`, no API keys.
-
-## 2. Set your search parameters
-
-Edit `config.yaml` only:
-
-- `search.search_terms` — one jobspy search runs per term (each pulls up to
-  `results_wanted` per board). Keep them junior/entry-level friendly.
-- `search.location` — default `"Metro Manila, Philippines"`; combined with
-  `search.country_indeed: "Philippines"` this keeps results local.
-- **Strict location gating (always on):** after scraping, every row is
-  checked against a Metro Manila / National Capital Region whitelist
-  (16 cities + Pateros + NCR markers; see `locations.py`). Any posting whose
-  location is explicitly outside the NCR — Cebu, Davao, Iloilo, Bacolod,
-  Cavite, Clark, Angeles, Baguio, etc. — is dropped no matter what the
-  search itself returns. Postings with no location at all are kept.
-- `search.results_wanted` — max per search term per job board (default 50).
-- `search.hours_old` — how far back to look (default 72h).
-- `search.max_experience_years` — a posting that *explicitly* requires more
-  than this many years is dropped (parses phrases like "3-5 years
-  experience"). Postings with no stated requirement are kept.
-- `search.exclude_title_keywords` — prefix/seniority terms dropped by title.
-- `search.exclude_company_keywords` — companies to drop by name.
-- `search.site_names` — which boards to scrape (`indeed`, `linkedin`,
-  `jobstreet`). JobStreet is not supported by jobspy, so it is scraped by
-  `jobstreet.py` through a headless Chromium (the same Playwright browser
-  installed above). It ignores the `", Philippines"` suffix on `location`.
+`db.py` connects over the local socket as your OS user (peer auth); override
+with the `DATABASE_URL` env var if you ever point it elsewhere.
 
 ## 3. Run it
 
 ```bash
-venv/bin/python main.py
+./run_and_open.sh                      # scrape -> ensure API/dashboard -> open browser
+./run_and_open.sh --legacy-xlsx        # also mirror new rows to applications.xlsx
 ```
 
-What happens:
-
-1. Scrape each term on each site (`linkedin_fetch_description: true` is
-   required, or LinkedIn descriptions come back empty and the
-   years-experience filter can't run).
-2. Deduplicate within the run by job URL.
-3. Filter by title keywords and the years requirement.
-4. Load `applications.xlsx`, compute the set of jobs already tracked
-   (by normalized URL, falling back to title+company), and append only the
-   NEW jobs with `status: NEW`.
-5. Write the sheet back sorted newest-first.
-
-Re-runs never duplicate a row: a job already in the sheet is skipped, so
-running 3–5x a week just keeps the sheet topped up with new postings.
-
-## 4. Schedule it (installed)
-
-A systemd **user** timer runs `main.py` three times a week and catches up
-on anything missed while the machine was off:
+Or run the pieces by hand:
 
 ```bash
-Mon/Wed/Fri 09:00  ->  ~/.config/systemd/user/job-auto-apply.timer
+venv/bin/python main.py                # scrape into Postgres (add --legacy-xlsx to mirror to xlsx)
+venv/bin/uvicorn api.main:app --reload --port 8000        # API
+cd dashboard && npm run dev                                 # dashboard on :5173
 ```
 
-- See the next scheduled run: `systemctl --user list-timers job-auto-apply.timer`
-- Force a run now: `systemctl --user start job-auto-apply.service`
-- Read the last run's log: `journalctl --user -u job-auto-apply -n 50`
-- Want 5 runs/week instead of 3? In the timer file change the `OnCalendar`
-  line to `Mon-Fri 09:00`, then `systemctl --user daemon-reload`.
-- Unscheduled runs don't duplicate rows anyway, so running manually in
-  addition is safe.
+`run_and_open.sh` starts the API/dashboard dev servers automatically if they
+aren't already running, then opens `http://localhost:5173` in your default
+browser. Manual CLI usage of the scraper still works (`venv/bin/python
+main.py`); running it repeatedly is safe because duplicates are skipped.
 
-Note: systemd user timers fire only while you're logged into your desktop
-session; `Persistent=true` makes it catch up missed runs after login.
+### Scheduled runs (removed)
 
-### Desktop notifications
+The old `job-auto-apply.timer` (Mon/Wed/Fri 09:00) has been **disabled and
+unarmed** per request — no scheduled fires. `run_and_open.sh` is the manual
+entry point for turning freshly-scraped postings into a browser tab. The
+timer/notifier unit files still exist under `~/.config/systemd/user/` if you
+want to re-enable or repurpose them later.
 
-A companion **user** daemon (`job-notifier.service`, auto-started at login)
-pops a desktop notification every time a scrape run finishes:
+The `job-notifier.service` desktop-notification daemon is unchanged and still
+tails `runs.log`.
 
-- It tails `paths.runs_log` (one summary line per run, written by
-  `main.py`) and calls `notify-send` — rendered by the Omarchy shell.
-- Watch it live: `journalctl --user -u job-notifier -f`
-- Stop/start it: `systemctl --user stop job-notifier.service` /
-  `systemctl --user start job-notifier.service`
-- Adjust how often it polls: `systemctl --user edit job-notifier.service`
-  → add `Environment=NOTIFIER_POLL_SECONDS=60`.
+## 4. Review and apply
 
-## 5. Review and apply
+Open the dashboard and check the **NEW** rows:
 
-Open `applications.xlsx`. New rows are `status: NEW`. To apply to a row:
+- **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
+  `REJECTED` directly (moving to `APPLIED` also stamps `applied_at`).
+- **Apply** button calls `POST /jobs/{id}/apply`, which shells out to
+  `apply_helper.py "<url>"`. Clicking Apply optimistically marks the row
+  `REVIEWED`; it's your call to flip it to `APPLIED` after you confirm the
+  form in the opened browser tab (apply_helper never clicks submit on
+  purpose — some ATS platforms detect automation).
+
+`apply_helper.py` hasn't changed in purpose — it's now triggered from the
+dashboard's Apply button instead of the CLI, but manual CLI debugging still
+works:
 
 ```bash
-python apply_helper.py "<job_url>"
+python apply_helper.py "https://ph.indeed.com/viewjob?jk=..." "my_resume.docx"
 ```
 
-This opens a real browser window and tries to auto-fill
-name/email/phone/resume-upload fields, then leaves the tab open for you to
-check and hit submit. Update the row's `status` (`REVIEWED` / `APPLIED` /
-`SKIP` / `REJECTED`) so future runs' dedupe keys stay sane and the sheet
-stays your source of truth.
+The resume path is optional; without it, text fields get prefilled but no
+file upload is attempted.
+
+## API
+
+- `GET /jobs` — query params: `status`, `source`, `date_from`, `date_to`,
+  `search` (title/company substring).
+- `PATCH /jobs/{id}` — `{"status": "..."}`; sets `applied_at` when
+  `APPLIED`.
+- `POST /jobs/{id}/apply` — launches `apply_helper.py` on the job's URL.
+- `GET /stats` — counts by status/source, new-this-week, applied-over-time.
+- `GET /runs/latest` — most recent `scrape_runs` row.
+- Interactive docs at `http://127.0.0.1:8000/docs`.
+
+This is a local single-user tool: no auth, no cloud deployment. CORS is
+limited to localhost origins.
 
 ## Troubleshooting: 400 errors from the scraper
 
@@ -139,10 +144,14 @@ sites change something.
 
 - The years filter is heuristic (text parsing). A posting that doesn't
   mention years is kept; one that says "20 years in business" near the
-  word "experience" could get dropped. Review rows in the sheet as needed.
+  word "experience" could get dropped. Review rows in the dashboard as
+  needed.
 - `apply_helper.py` fills forms, it never clicks final submit — some ATS
   platforms (Workday especially) actively detect and block automation, so
   keep this manual step.
+- `applications.xlsx` is still written when you pass `--legacy-xlsx`; the
+  Postgres `jobs` table is the new source of truth and the dashboard reads
+  only Postgres.
 - Indoor-only scoring/tailoring (the old resume-tailoring pipeline) was
   archived under `.archive-tailoring/` — nothing imports it anymore.
 - Greenhouse/Lever/company-board direct scraping isn't wired up yet
