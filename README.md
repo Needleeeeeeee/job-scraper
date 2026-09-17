@@ -9,7 +9,8 @@ to postings from a browser tab.
 - New leads land in `jobs` (Postgres) with `status: NEW`; re-runs never
   duplicate rows.
 - The dashboard lists postings, filters by status/source/date/text, and has an
-  **Apply** button per row that opens a real browser via `apply_helper.py`.
+  **Apply** button per row that opens the posting as a new tab in your
+  existing browser.
 - `applications.xlsx` support is kept behind `--legacy-xlsx` until you've
   confirmed the Postgres path on a few real runs.
 
@@ -20,6 +21,7 @@ venv/bin/python main.py          scrape -> Postgres (jobs, scrape_runs)
 venv/bin/uvicorn api.main:app     FastAPI on :8000 (GET /jobs, PATCH, POST /jobs/{id}/apply, /stats, /runs/latest)
 dashboard/                        Vite + React + Tailwind dev server on :5173
 run_and_open.sh                   scrape, ensure both servers, open the dashboard
+stop.sh                           stop the API/dashboard + any leftover browser processes
 apply_helper.py                   opens a job URL in a real browser and prefills form fields
 notifier.py                       tails runs.log -> desktop notification (unchanged)
 ```
@@ -68,6 +70,13 @@ aren't already running, then opens `http://localhost:5173` in your default
 browser. Manual CLI usage of the scraper still works (`venv/bin/python
 main.py`); running it repeatedly is safe because duplicates are skipped.
 
+To shut everything down (including any stray `apply_helper.py` / Playwright
+browser left over from manual CLI use):
+
+```bash
+./stop.sh
+```
+
 ### Scheduled runs (removed)
 
 The old `job-auto-apply.timer` (Mon/Wed/Fri 09:00) has been **disabled and
@@ -85,15 +94,14 @@ Open the dashboard and check the **NEW** rows:
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
   `REJECTED` directly (moving to `APPLIED` also stamps `applied_at`).
-- **Apply** button calls `POST /jobs/{id}/apply`, which shells out to
-  `apply_helper.py "<url>"`. Clicking Apply optimistically marks the row
-  `REVIEWED`; it's your call to flip it to `APPLIED` after you confirm the
-  form in the opened browser tab (apply_helper never clicks submit on
-  purpose — some ATS platforms detect automation).
+- **Apply** button opens the job URL in a new tab of your existing browser
+  (`window.open`). It optimistically marks the row `REVIEWED`; flip it to
+  `APPLIED` manually after you've finished the application (apply_helper
+  never files anything for you — some ATS platforms detect automation).
 
-`apply_helper.py` hasn't changed in purpose — it's now triggered from the
-dashboard's Apply button instead of the CLI, but manual CLI debugging still
-works:
+`apply_helper.py` is unchanged in purpose but is no longer triggered by the
+dashboard (Apply now just opens a new tab). It's still there for manual CLI
+use and debugging when you want field prefill:
 
 ```bash
 python apply_helper.py "https://ph.indeed.com/viewjob?jk=..." "my_resume.docx"
@@ -108,7 +116,8 @@ file upload is attempted.
   `search` (title/company substring).
 - `PATCH /jobs/{id}` — `{"status": "..."}`; sets `applied_at` when
   `APPLIED`.
-- `POST /jobs/{id}/apply` — launches `apply_helper.py` on the job's URL.
+- `POST /jobs/{id}/apply` — resolves the job's URL (the dashboard opens it
+  in a new tab; no browser automation).
 - `GET /stats` — counts by status/source, new-this-week, applied-over-time.
 - `GET /runs/latest` — most recent `scrape_runs` row.
 - Interactive docs at `http://127.0.0.1:8000/docs`.

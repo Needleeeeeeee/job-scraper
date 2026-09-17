@@ -153,7 +153,6 @@ export default function App() {
       setPendingApply(job.id)
       try {
         window.open(job.url, '_blank')
-        await fetch(`${API}/jobs/${job.id}/apply`, { method: 'POST' })
       } catch (e) {
         console.error('apply trigger failed:', e)
       } finally {
