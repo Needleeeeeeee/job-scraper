@@ -18,13 +18,19 @@ to postings from a browser tab.
 
 ```
 venv/bin/python main.py          scrape -> Postgres (jobs, scrape_runs)
-venv/bin/uvicorn api.main:app     FastAPI on :8000 (GET /jobs, PATCH, POST /jobs/{id}/apply, /stats, /runs/latest)
+job-dashboard-api.service         systemd user unit: FastAPI on :8000 (GET /jobs, PATCH, POST /jobs/{id}/apply, /stats, /runs/latest)
+job-dashboard-web.service         systemd user unit: Vite + React + Tailwind dev server on :5173
 dashboard/                        Vite + React + Tailwind dev server on :5173
 run_and_open.sh                   scrape, ensure both servers, open the dashboard
 stop.sh                           stop the API/dashboard + any leftover browser processes
 apply_helper.py                   opens a job URL in a real browser and prefills form fields
 notifier.py                       tails runs.log -> desktop notification (unchanged)
 ```
+
+The API and dashboard run as **systemd user units**
+(`job-dashboard-api.service`, `job-dashboard-web.service`), so they start at
+login, survive tab reloads, and auto-restart if they crash. `git` this repo
+does not contain them; the unit files live in `~/.config/systemd/user/`.
 
 ## 2. Setup
 
@@ -57,16 +63,16 @@ with the `DATABASE_URL` env var if you ever point it elsewhere.
 ./run_and_open.sh --legacy-xlsx        # also mirror new rows to applications.xlsx
 ```
 
-Or run the pieces by hand:
+Or run the pieces by hand if you'd rather not use systemd:
 
 ```bash
 venv/bin/python main.py                # scrape into Postgres (add --legacy-xlsx to mirror to xlsx)
-venv/bin/uvicorn api.main:app --reload --port 8000        # API
-cd dashboard && npm run dev                                 # dashboard on :5173
+systemctl --user start job-dashboard-api job-dashboard-web   # or uvicorn / npm run dev directly
 ```
 
-`run_and_open.sh` starts the API/dashboard dev servers automatically if they
-aren't already running, then opens `http://localhost:5173` in your default
+`run_and_open.sh` ensures the API/dashboard servers are up (it starts the
+systemd units if they're stopped, falling back to plain `nohup` processes if
+systemd is unavailable), then opens `http://localhost:5173` in your default
 browser. Manual CLI usage of the scraper still works (`venv/bin/python
 main.py`); running it repeatedly is safe because duplicates are skipped.
 
@@ -74,8 +80,11 @@ To shut everything down (including any stray `apply_helper.py` / Playwright
 browser left over from manual CLI use):
 
 ```bash
-./stop.sh
+./stop.sh          # -> systemctl --user stop job-dashboard-api job-dashboard-web
 ```
+
+Both units are `Restart=always` services, so `kill`ing the processes by hand
+won't stick — use `stop.sh`, which stops the units themselves.
 
 ### Scheduled runs (removed)
 
@@ -93,11 +102,16 @@ tails `runs.log`.
 Open the dashboard and check the **NEW** rows:
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
-  `REJECTED` directly (moving to `APPLIED` also stamps `applied_at`).
+  `REJECTED` directly. Moving to `APPLIED` stamps `applied_at`; moving away
+  from it clears `applied_at` so the chart stays accurate.
 - **Apply** button opens the job URL in a new tab of your existing browser
-  (`window.open`). It optimistically marks the row `REVIEWED`; flip it to
-  `APPLIED` manually after you've finished the application (apply_helper
-  never files anything for you — some ATS platforms detect automation).
+  (`window.open`) and persists the row as `REVIEWED` (so the change survives
+  a tab reload). Flip it to `APPLIED` manually after you've finished the
+  application (apply_helper never files anything for you — some ATS
+  platforms detect automation).
+- **Search** filters live as you type. A plain query matches **title or
+  company**; prefix it with `title:` to restrict the match to job titles
+  only (e.g. `title:python`). Matching text is highlighted in the table.
 
 `apply_helper.py` is unchanged in purpose but is no longer triggered by the
 dashboard (Apply now just opens a new tab). It's still there for manual CLI
@@ -115,7 +129,7 @@ file upload is attempted.
 - `GET /jobs` — query params: `status`, `source`, `date_from`, `date_to`,
   `search` (title/company substring).
 - `PATCH /jobs/{id}` — `{"status": "..."}`; sets `applied_at` when
-  `APPLIED`.
+  `APPLIED`, clears it when moving to any other status.
 - `POST /jobs/{id}/apply` — resolves the job's URL (the dashboard opens it
   in a new tab; no browser automation).
 - `GET /stats` — counts by status/source, new-this-week, applied-over-time.

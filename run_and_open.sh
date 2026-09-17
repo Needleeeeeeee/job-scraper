@@ -27,8 +27,11 @@ fi
 
 # --- start the API if it isn't already serving ---
 if ! curl -sf "$API_URL/health" >/dev/null 2>&1; then
-    echo "[run_and_open] starting API (uvicorn) -> $API_URL"
-    if [ -x venv/bin/uvicorn ]; then
+    echo "[run_and_open] starting API (systemd: job-dashboard-api) -> $API_URL"
+    if systemctl --user start job-dashboard-api.service 2>/dev/null; then
+        : # managed by systemd now
+    elif [ -x venv/bin/uvicorn ]; then
+        echo "[run_and_open] systemd unavailable -- falling back to nohup uvicorn"
         nohup venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8000 \
             >> "$API_LOG" 2>&1 &
     else
@@ -39,8 +42,11 @@ fi
 
 # --- start the dashboard dev server if it isn't already serving ---
 if ! curl -sf "$DASH_URL" >/dev/null 2>&1; then
-    echo "[run_and_open] starting dashboard (vite) -> $DASH_URL"
-    if command -v npm >/dev/null 2>&1; then
+    echo "[run_and_open] starting dashboard (systemd: job-dashboard-web) -> $DASH_URL"
+    if systemctl --user start job-dashboard-web.service 2>/dev/null; then
+        : # managed by systemd now
+    elif command -v npm >/dev/null 2>&1; then
+        echo "[run_and_open] systemd unavailable -- falling back to nohup vite"
         (cd dashboard && nohup npm run dev > "../$DASH_LOG" 2>&1 &)
     else
         echo "WARNING: npm not found; can't start the dashboard." >&2

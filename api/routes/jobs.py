@@ -59,7 +59,10 @@ def update_status(job_id: int, body: JobStatusUpdate):
             )
         else:
             cur.execute(
-                "UPDATE jobs SET status = %s WHERE id = %s RETURNING *",
+                """
+                UPDATE jobs SET status = %s, applied_at = NULL
+                WHERE id = %s RETURNING *
+                """,
                 (body.status, job_id),
             )
         row = cur.fetchone()

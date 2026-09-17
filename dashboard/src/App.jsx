@@ -42,6 +42,23 @@ function timeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
+function Highlight({ text, query }) {
+  const q = (query || '').trim().toLowerCase()
+  const s = String(text || '')
+  if (!q || !s) return s
+  const i = s.toLowerCase().indexOf(q)
+  if (i === -1) return s
+  return (
+    <>
+      {s.slice(0, i)}
+      <mark className="rounded bg-amber-200 px-0.5 text-inherit dark:bg-amber-700 dark:text-amber-100">
+        {s.slice(i, i + q.length)}
+      </mark>
+      {s.slice(i + q.length)}
+    </>
+  )
+}
+
 function useDarkMode() {
   const [dark, setDark] = useState(() => {
     const stored = localStorage.getItem('theme')
@@ -104,23 +121,27 @@ export default function App() {
     return () => clearInterval(t)
   }, [fetchAll])
 
+  const parsedSearch = useMemo(() => {
+    const raw = (search || '').trim()
+    const titleOnly = /^title:/i.test(raw)
+    return { titleOnly, q: raw.replace(/^title:/i, '').trim().toLowerCase() }
+  }, [search])
+
   const filtered = useMemo(() => {
+    const { titleOnly, q } = parsedSearch
     return jobs.filter((job) => {
       if (status && job.status !== status) return false
       if (source && job.source !== source) return false
       if (dateFrom && String(job.date_posted || '').slice(0, 10) < dateFrom) return false
       if (dateTo && String(job.date_posted || '').slice(0, 10) > dateTo) return false
-      if (search) {
-        const q = search.toLowerCase()
-        if (
-          !String(job.title || '').toLowerCase().includes(q) &&
-          !String(job.company || '').toLowerCase().includes(q)
-        )
-          return false
+      if (q) {
+        const inTitle = String(job.title || '').toLowerCase().includes(q)
+        const inCompany = String(job.company || '').toLowerCase().includes(q)
+        if (titleOnly ? !inTitle : !inTitle && !inCompany) return false
       }
       return true
     })
-  }, [jobs, status, source, dateFrom, dateTo, search])
+  }, [jobs, status, source, dateFrom, dateTo, parsedSearch])
 
   const updateJobs = useCallback(
     (id, patch) => {
@@ -155,9 +176,17 @@ export default function App() {
         window.open(job.url, '_blank')
       } catch (e) {
         console.error('apply trigger failed:', e)
-      } finally {
-        setPendingApply(null)
       }
+      try {
+        await fetch(`${API}/jobs/${job.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'REVIEWED' }),
+        })
+      } catch (e) {
+        console.error('apply status persist failed:', e)
+      }
+      setPendingApply(null)
     },
     [updateJobs]
   )
@@ -322,7 +351,7 @@ export default function App() {
           </label>
           <input
             type="search"
-            placeholder="Search title or company…"
+            placeholder="Search title or company… (title:foo = titles only)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="min-w-52 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
@@ -363,11 +392,11 @@ export default function App() {
                         rel="noreferrer"
                         className="font-medium text-slate-800 hover:text-blue-600 hover:underline dark:text-slate-200 dark:hover:text-blue-400"
                       >
-                        {job.title || 'Untitled'}
+                        <Highlight text={job.title || 'Untitled'} query={parsedSearch.q} />
                       </a>
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
-                      {job.company || '—'}
+                      <Highlight text={job.company || '—'} query={parsedSearch.q} />
                     </td>
                     <td className="px-4 py-3">
                       <span

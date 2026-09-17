@@ -2,6 +2,10 @@
 # Stop the job-scraper dashboard stack (API + dev server) and clean up any
 # leftover apply_helper.py / Playwright browser processes.
 #
+# The API + dashboard run as systemd user units (job-dashboard-api.service,
+# job-dashboard-web.service). This script stops them (they'll restart with
+# the next `systemctl --user start` / login).
+#
 # Usage:
 #   ./stop.sh                     # stop everything
 #   ./stop.sh --keep-log          # same, but leave api.log/dashboard.log alone
@@ -11,14 +15,22 @@ cd "$(dirname "$0")"
 
 stopped=0
 
-# 1. FastAPI backend (uvicorn)
+# 1. systemd user units for the API + dashboard (disables auto-restart while
+#    stopped; re-enable with run_and_open.sh, systemctl --user start, or login)
+for unit in job-dashboard-api job-dashboard-web; do
+    if systemctl --user is-active --quiet "$unit.service" 2>/dev/null; then
+        echo "[stop] stopping systemd unit $unit.service"
+        systemctl --user stop "$unit.service" 2>/dev/null || true
+        stopped=1
+    fi
+done
+
+# 2. Fallback: kill any manually-started copies (nohup/legacy run_and_open.sh)
 for pid in $(pgrep -f "uvicorn api.main:app" || true); do
     echo "[stop] stopping API (pid $pid)"
     kill "$pid" 2>/dev/null || true
     stopped=1
 done
-
-# 2. Vite dev server
 for pid in $(pgrep -f "node .*vite" || true); do
     echo "[stop] stopping dashboard dev server (pid $pid)"
     kill "$pid" 2>/dev/null || true
@@ -37,17 +49,8 @@ for pid in $(pgrep -f "playwright_chromiumdev_profile" || true); do
     stopped=1
 done
 
-# 4. systemd user units started by run_and_open.sh (if any)
-for unit in dashboard-dev jobscrape runopen; do
-    if systemctl --user is-active --quiet "$unit.service" 2>/dev/null; then
-        echo "[stop] stopping systemd unit $unit.service"
-        systemctl --user stop "$unit.service" 2>/dev/null || true
-        stopped=1
-    fi
-done
-
 if [ "$stopped" = "0" ]; then
     echo "[stop] nothing was running -- dashboard stack is already stopped."
 else
-    echo "[stop] done. Restart with ./run_and_open.sh"
+    echo "[stop] done. Restart with: systemctl --user start job-dashboard-api job-dashboard-web"
 fi
