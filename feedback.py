@@ -8,10 +8,11 @@ back and filters out new postings that look like the ones you rejected.
 
 Two layers, cheapest first:
 
-1. Heuristic (always on, no API needed): tokenizes the titles/companies of
-   decided jobs and auto-excludes tokens and companies that you
-   overwhelmingly reject/skip (e.g. every posting with "support" in the
-   title got SKIPped -> future "support" titles are dropped pre-insert).
+1. Heuristic (always on, no API needed): learns from the location field
+   first (cities you always skip), then from title/company words -- but a
+   skip already explained by a bad location is NOT blamed on its title,
+   so skipping "Junior Developer (Cebu)" for location can never teach
+   the filter to ban "developer".
 
 2. AI (only when an API key is present): sends a compact summary of past
    GOOD vs BAD decisions plus the new batch to an LLM and drops whatever
@@ -117,7 +118,7 @@ def norm_title(text: str) -> str:
 
 
 def load_decisions(conn=None) -> list[dict]:
-    """Fetch decided jobs (title/company/status) from the dashboard DB."""
+    """Fetch decided jobs (title/company/location/status) from the dashboard DB."""
     import db
 
     own = conn is None
@@ -127,7 +128,7 @@ def load_decisions(conn=None) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT title, company, status FROM jobs
+                SELECT title, company, location, status FROM jobs
                 WHERE status = ANY(%s)
                 ORDER BY id DESC LIMIT 2000
                 """,
@@ -140,22 +141,63 @@ def load_decisions(conn=None) -> list[dict]:
             conn.close()
 
 
+def loc_tokens(text: str) -> list[str]:
+    """Location tokens: split on non-alphanumerics, drop pure numbers and
+    generic fillers so "Manila", "Cebu", "Makati" survive but "1015" doesn't."""
+    toks = [t for t in _TOKEN_PAT.findall((text or "").lower())
+            if t not in _STOPWORDS and not t.isdigit()
+            and t not in {"city", "metro", "manila", "philippines", "ncr",
+                          "hybrid", "onsite", "remote"}]
+    return toks
+
+
 def learn_patterns(decisions: list[dict], fc: dict) -> dict:
     """Derive reject patterns from past decisions.
 
-    Returns {"keywords": [...], "companies": [...], "n_good": int,
-    "n_bad": int} -- empty lists when there isn't enough signal.
+    Returns {"keywords": [...], "phrases": [...], "companies": [...],
+    "locations": [...], "n_good": int, "n_bad": int} -- empty lists when
+    there isn't enough signal.
+
+    Skips are attributed to the most specific cause first: a BAD job whose
+    location already matches a learned-bad location is "explained" by
+    location, so its title/company words are EXCLUDED from title/company
+    learning. Without this, skipping e.g. "Junior Developer (Cebu)" for
+    location would wrongly teach the filter to ban "junior"/"developer".
     """
     good = [d for d in decisions if d.get("status") in GOOD]
     bad = [d for d in decisions if d.get("status") in BAD]
     patterns: dict = {"keywords": [], "phrases": [], "companies": [],
-                      "n_good": len(good), "n_bad": len(bad)}
+                      "locations": [], "n_good": len(good), "n_bad": len(bad)}
     if len(decisions) < fc["min_samples"]:
         return patterns
 
+    # Pass 1: location patterns (where do your skips cluster?).
+    lhits: Counter = Counter()
+    lbad: Counter = Counter()
+    for d in decisions:
+        toks = set(loc_tokens(d.get("location", "")))
+        for t in toks:
+            lhits[t] += 1
+            if d.get("status") in BAD:
+                lbad[t] += 1
+    bad_locs = set()
+    for tok, n in lhits.items():
+        if n >= fc["min_hits"] and lbad[tok] / n >= fc["min_reject_rate"]:
+            patterns["locations"].append(tok)
+            bad_locs.add(tok)
+    patterns["locations"].sort()
+
+    def location_explained(d: dict) -> bool:
+        return bool(set(loc_tokens(d.get("location", ""))) & bad_locs)
+
+    # Pass 2: title/company patterns, ignoring BAD jobs whose skip is
+    # already explained by location (their title words are innocent).
+    teachable = [d for d in decisions
+                 if d.get("status") in GOOD or not location_explained(d)]
+
     hits: Counter = Counter()
     bad_hits: Counter = Counter()
-    for d in decisions:
+    for d in teachable:
         toks = set(tokens(d.get("title", "")))
         for t in toks:
             hits[t] += 1
@@ -168,7 +210,7 @@ def learn_patterns(decisions: list[dict], fc: dict) -> dict:
 
     phits: Counter = Counter()
     pbad: Counter = Counter()
-    for d in decisions:
+    for d in teachable:
         phrs = set(phrases(d.get("title", "")))
         for p in phrs:
             phits[p] += 1
@@ -182,7 +224,7 @@ def learn_patterns(decisions: list[dict], fc: dict) -> dict:
     if fc["auto_exclude_companies"]:
         chits: Counter = Counter()
         cbad: Counter = Counter()
-        for d in decisions:
+        for d in teachable:
             c = (d.get("company") or "").strip().lower()
             if not c:
                 continue
@@ -197,16 +239,22 @@ def learn_patterns(decisions: list[dict], fc: dict) -> dict:
 
 
 def apply_heuristic(df, patterns: dict):
-    """Drop rows matching learned keywords/phrases/companies. Returns (df, n, reasons)."""
+    """Drop rows matching learned keywords/phrases/companies/locations.
+    Returns (df, n, reasons)."""
     if df is None or getattr(df, "empty", True):
         return df, 0, []
-    if not patterns["keywords"] and not patterns.get("phrases") and not patterns["companies"]:
+    if not patterns["keywords"] and not patterns.get("phrases") \
+            and not patterns["companies"] and not patterns.get("locations"):
         return df, 0, []
     kw = set(patterns["keywords"])
     phrs = set(patterns.get("phrases", []))
     comps = set(patterns["companies"])
+    locs = set(patterns.get("locations", []))
 
     def bad_row(row) -> str | None:
+        loc_hit = sorted(set(loc_tokens(row.get("location", ""))) & locs)
+        if loc_hit:
+            return f"location:{','.join(loc_hit)}"
         nt = norm_title(row.get("title", ""))
         title_toks = set(nt.split())
         hit = sorted(title_toks & kw)
@@ -612,11 +660,13 @@ def apply_feedback(df, cfg: dict):
         return df
 
     patterns = learn_patterns(decisions, fc)
-    if patterns["keywords"] or patterns.get("phrases") or patterns["companies"]:
+    if patterns["keywords"] or patterns.get("phrases") or patterns["companies"] \
+            or patterns.get("locations"):
         print(f"[feedback] learned from {len(decisions)} decisions "
               f"({n_good} good / {n_bad} bad): "
               f"keywords={patterns['keywords']} phrases={patterns.get('phrases', [])} "
-              f"companies={patterns['companies']}")
+              f"companies={patterns['companies']} "
+              f"locations={patterns.get('locations', [])}")
     df, n_heur, _ = apply_heuristic(df, patterns)
     if n_heur:
         print(f"[feedback] heuristic dropped {n_heur} postings matching reject patterns.")
