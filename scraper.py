@@ -245,7 +245,7 @@ def apply_keyword_filters(df: pd.DataFrame, s: dict) -> pd.DataFrame:
 
 
 def apply_feedback_filter(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
-    """Drop postings resembling past REJECTED/SKIP dashboard decisions.
+    """Drop postings resembling past negatively-decided dashboard rows.
 
     See feedback.py. Best-effort: any error returns the input unchanged so
     a broken learner can never break a scrape.

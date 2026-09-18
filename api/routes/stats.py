@@ -7,7 +7,10 @@ from api import db
 
 router = APIRouter()
 
-OUTCOME_STATUSES = ("APPLIED", "REJECTED", "SKIP")
+OUTCOME_STATUSES = ("APPLIED", "REJECTED", "SKIP", "MISMATCH", "EXP_GAP")
+# Dashboard graph keys per outcome status.
+_SERIES_KEYS = {"APPLIED": "applied", "REJECTED": "rejected", "SKIP": "skipped",
+                "MISMATCH": "mismatch", "EXP_GAP": "expgap"}
 
 
 def _daily_series(cur, status: str) -> list[dict]:
@@ -102,6 +105,16 @@ def stats():
             (week_start,),
         )
         skipped_this_week = cur.fetchone()[0]
+        cur.execute(
+            "SELECT count(*) FROM jobs WHERE status = 'MISMATCH' AND status_updated_at >= %s",
+            (week_start,),
+        )
+        mismatch_this_week = cur.fetchone()[0]
+        cur.execute(
+            "SELECT count(*) FROM jobs WHERE status = 'EXP_GAP' AND status_updated_at >= %s",
+            (week_start,),
+        )
+        expgap_this_week = cur.fetchone()[0]
 
         cur.execute(
             """
@@ -118,21 +131,24 @@ def stats():
         rejected_series = _daily_series(cur, "REJECTED")
         skipped_series = _daily_series(cur, "SKIP")
         applied_daily = _daily_series(cur, "APPLIED")
+        mismatch_series = _daily_series(cur, "MISMATCH")
+        expgap_series = _daily_series(cur, "EXP_GAP")
 
         # Merged per-day outcome buckets for the line graph.
         by_day: dict[str, dict] = {}
-        for day_row in applied_daily:
-            by_day.setdefault(day_row["date"], {"date": day_row["date"],
-                                                  "applied": 0, "rejected": 0, "skipped": 0})
-            by_day[day_row["date"]]["applied"] = day_row["count"]
-        for day_row in rejected_series:
-            by_day.setdefault(day_row["date"], {"date": day_row["date"],
-                                                  "applied": 0, "rejected": 0, "skipped": 0})
-            by_day[day_row["date"]]["rejected"] = day_row["count"]
-        for day_row in skipped_series:
-            by_day.setdefault(day_row["date"], {"date": day_row["date"],
-                                                  "applied": 0, "rejected": 0, "skipped": 0})
-            by_day[day_row["date"]]["skipped"] = day_row["count"]
+
+        def _blank(date: str) -> dict:
+            return {"date": date, "applied": 0, "rejected": 0, "skipped": 0,
+                    "mismatch": 0, "expgap": 0}
+
+        for day_row, key in ((applied_daily, "applied"),
+                             (rejected_series, "rejected"),
+                             (skipped_series, "skipped"),
+                             (mismatch_series, "mismatch"),
+                             (expgap_series, "expgap")):
+            for row in day_row:
+                by_day.setdefault(row["date"], _blank(row["date"]))
+                by_day[row["date"]][key] = row["count"]
         outcome_series = [by_day[k] for k in sorted(by_day)]
 
     return {
@@ -142,10 +158,14 @@ def stats():
         "applied_series": applied_series,
         "rejected_series": rejected_series,
         "skipped_series": skipped_series,
+        "mismatch_series": mismatch_series,
+        "expgap_series": expgap_series,
         "outcome_series": outcome_series,
         "applied_this_week": applied_this_week,
         "rejected_this_week": rejected_this_week,
         "skipped_this_week": skipped_this_week,
+        "mismatch_this_week": mismatch_this_week,
+        "expgap_this_week": expgap_this_week,
     }
 
 

@@ -8,7 +8,7 @@ import os
 import pandas as pd
 
 COLUMNS = [
-    "status",        # NEW / REVIEWED / APPLIED / REJECTED / SKIP
+    "status",        # NEW / REVIEWED / APPLIED / REJECTED / SKIP / MISMATCH / EXP_GAP
     "title",
     "company",
     "location",

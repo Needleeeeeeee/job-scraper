@@ -117,10 +117,11 @@ button in the header whenever you want fresh postings — no need to rerun
 re-scraping is always safe.
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
-  `REJECTED` directly. Moving to `APPLIED` stamps `applied_at`; moving away
+  `REJECTED` / `MISMATCH` / `EXP_GAP` directly (`MISMATCH` = wrong role or
+  fit, `EXP_GAP` = needs more experience than you have). Moving to `APPLIED`
   from it clears `applied_at` so the chart stays accurate. Every change is
   also recorded in `job_status_history` with a timestamp, which powers the
-  applied-vs-rejected-vs-skipped graph and the scraper's feedback learner.
+   applied-vs-rejected-vs-skipped-vs-mismatch-vs-expgap graph and the scraper's feedback learner.
 - **Apply** button opens the job URL in a new tab of your existing browser
   (`window.open`) and persists the row as `REVIEWED` (so the change survives
   a tab reload). Flip it to `APPLIED` manually after you've finished the
@@ -129,7 +130,8 @@ re-scraping is always safe.
 - **Search** filters live as you type. A plain query matches **title or
   company**; prefix it with `title:` to restrict the match to job titles
   only (e.g. `title:python`). Matching text is highlighted in the table.
-- **Negative filter-out tags:** the `✕ SKIP (n)` / `✕ REJECTED (n)` pills
+- **Negative filter-out tags:** the `✕ SKIP (n)` / `✕ REJECTED (n)` /
+  `✕ MISMATCH (n)` / `✕ EXP_GAP (n)` pills
   next to the status dropdown hide those postings from the table (counts
   shown). Picking an explicit status in the dropdown overrides them.
 
@@ -153,8 +155,10 @@ file upload is attempted.
 - `POST /jobs/{id}/apply` — resolves the job's URL (the dashboard opens it
   in a new tab; no browser automation).
 - `GET /stats` — counts by status/source, new-this-week, per-outcome this-week
-  counters, plus `applied_series`, `rejected_series`, `skipped_series` and a
-  merged `outcome_series` (`[{date, applied, rejected, skipped}]`, one point
+  counters, plus `applied_series`, `rejected_series`, `skipped_series`,
+  `mismatch_series`, `expgap_series` and a
+  merged `outcome_series` (`[{date, applied, rejected, skipped, mismatch,
+  expgap}]`, one point
   per day) for the graph.
 - `GET /runs/latest` — most recent `scrape_runs` row.
 - `POST /scrape` — start a scrape in the background (same code as
@@ -167,14 +171,17 @@ file upload is attempted.
 
 ## Feedback learner (scraper learns from your decisions)
 
-Marking postings `REJECTED` / `SKIP` (vs `APPLIED` / `REVIEWED`) teaches the
+Marking postings `REJECTED` / `SKIP` / `MISMATCH` / `EXP_GAP`
+(vs `APPLIED` / `REVIEWED`) teaches the
 next scrape what to drop, via `feedback.py` (see `config.yaml` → `feedback:`):
 
 - **Heuristic (no API needed):** once you have `min_samples` decided jobs
   (default 10), title tokens, two-word phrases, and companies you
   overwhelmingly reject (e.g. `salesforce`, `power platform`, a staffing
   firm you always skip) are auto-excluded from new scrapes. `SKIP` counts
-  exactly like `REJECTED` — a skip means "not relevant". Thresholds
+  exactly like `REJECTED` — a skip means "not relevant" — and so do the
+  finer-grained `MISMATCH` (wrong fit) and `EXP_GAP` (needs more
+  experience). Thresholds
   (`min_hits`, `min_reject_rate`, `min_phrase_hits`, ...) are tunable;
   set `enabled: false` to turn off.
 - **AI (needs a key in `.env`):** when `use_ai` is true and a key exists

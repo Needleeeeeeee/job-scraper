@@ -122,7 +122,7 @@ CREATE INDEX IF NOT EXISTS job_status_history_changed_at_idx ON job_status_histo
 
 
 def ensure_tracking_schema(conn=None):
-    """Idempotently add REJECTED/SKIP tracking columns + history table.
+    """Idempotently add negative-status tracking columns + history table.
 
     Safe to call on every startup: uses IF NOT EXISTS guards. Also
     backfills status_updated_at for pre-existing rows from

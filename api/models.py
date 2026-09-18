@@ -3,7 +3,8 @@ from datetime import date, datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
-STATUSES = {"NEW", "REVIEWED", "APPLIED", "SKIP", "REJECTED"}
+STATUSES = {"NEW", "REVIEWED", "APPLIED", "SKIP", "REJECTED",
+            "MISMATCH", "EXP_GAP"}
 
 
 class Job(BaseModel):
@@ -23,7 +24,7 @@ class Job(BaseModel):
 
 
 class JobStatusUpdate(BaseModel):
-    status: str = Field(pattern=r"^(NEW|REVIEWED|APPLIED|SKIP|REJECTED)$")
+    status: str = Field(pattern=r"^(NEW|REVIEWED|APPLIED|SKIP|REJECTED|MISMATCH|EXP_GAP)$")
 
 
 def now_utc() -> datetime:

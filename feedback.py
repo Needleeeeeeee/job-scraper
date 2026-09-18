@@ -1,7 +1,8 @@
 """
 Feedback learner: the scraper learns from your dashboard decisions.
 
-Every time you mark a posting REJECTED / SKIP (vs APPLIED / REVIEWED) in the
+Every time you mark a posting REJECTED / SKIP / MISMATCH / EXP_GAP
+(vs APPLIED / REVIEWED) in the
 dashboard, that decision is stored in Postgres (`jobs.status` +
 `job_status_history`). On the next scrape, this module reads those decisions
 back and filters out new postings that look like the ones you rejected.
@@ -31,7 +32,10 @@ from collections import Counter
 from datetime import date
 
 GOOD = ("APPLIED", "REVIEWED")
-BAD = ("REJECTED", "SKIP")
+# All negative dashboard decisions. SKIP is generic, MISMATCH means wrong
+# role/field/city fit, EXP_GAP means the posting needs more experience
+# than you have -- all three count exactly like REJECTED for learning.
+BAD = ("REJECTED", "SKIP", "MISMATCH", "EXP_GAP")
 
 _TOKEN_PAT = re.compile(r"[a-z0-9+#.]+")
 _STOPWORDS = frozenset({
@@ -45,6 +49,8 @@ _DEFAULTS = {
     "min_samples": 10,       # decided jobs needed before learning kicks in
     # SKIP and REJECTED count equally as "bad" everywhere below: a skip
     # means "not relevant to my job search", same weight as a rejection.
+    # MISMATCH (wrong fit) and EXP_GAP (needs more experience) are also
+    # bad -- finer-grained reasons, same learning weight.
     "min_hits": 2,           # token must appear in this many decided jobs
     "min_reject_rate": 0.8,  # ... with this fraction rejected/skipped
     "min_phrase_hits": 2,    # same idea for two-word phrases
@@ -491,8 +497,9 @@ def _build_scoring_prompt(decisions: list[dict], batch_titles: list[dict],
     system = (
         "You filter job postings for a junior/entry-level software developer "
         "in Metro Manila, Philippines. The user reviews scraped postings and marks "
-        "good ones APPLIED/REVIEWED and bad ones REJECTED/SKIP. SKIP means the "
-        "posting is not relevant to their job search -- treat it with exactly "
+        "good ones APPLIED/REVIEWED and bad ones REJECTED/SKIP/MISMATCH/EXP_GAP. "
+        "SKIP is a generic pass, MISMATCH means wrong role or fit, EXP_GAP means "
+        "it needs more experience -- treat all three with exactly "
         "the same weight as REJECTED. Flag new postings that resemble the BAD ones "
         "(wrong seniority, wrong role family, wrong field, companies they avoid). "
         "When unsure, KEEP. Reply ONLY with a JSON "
@@ -558,7 +565,7 @@ def ai_filter(df, decisions: list[dict], fc: dict, keys: dict):
     drop_idx = [batch.index[i] for i, v in verdicts.items() if v == "SKIP"]
     kept = df.drop(index=drop_idx).reset_index(drop=True)
     print(f"[feedback] AI ({name}/{model}) skipped {len(drop_idx)} of {len(batch)} "
-          f"new postings based on past REJECTED/SKIP decisions.")
+          f"new postings based on past negative decisions.")
     return kept, len(drop_idx), name
 
 

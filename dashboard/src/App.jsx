@@ -12,7 +12,7 @@ import {
 
 const API = 'http://127.0.0.1:8000'
 
-const STATUSES = ['NEW', 'REVIEWED', 'APPLIED', 'SKIP', 'REJECTED']
+const STATUSES = ['NEW', 'REVIEWED', 'APPLIED', 'SKIP', 'REJECTED', 'MISMATCH', 'EXP_GAP']
 const SOURCES = ['indeed', 'linkedin', 'jobstreet', 'glassdoor', 'google']
 
 const STATUS_STYLES = {
@@ -21,7 +21,18 @@ const STATUS_STYLES = {
   APPLIED: 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:ring-emerald-800',
   SKIP: 'bg-slate-200 text-slate-600 ring-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600',
   REJECTED: 'bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-900 dark:text-rose-300 dark:ring-rose-800',
+  MISMATCH: 'bg-orange-100 text-orange-700 ring-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:ring-orange-800',
+  EXP_GAP: 'bg-violet-100 text-violet-700 ring-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:ring-violet-800',
 }
+
+// Negative-status hide pills: active (hiding) color per status.
+const HIDE_ACTIVE_STYLES = {
+  SKIP: 'bg-slate-500 text-white ring-slate-500',
+  REJECTED: 'bg-rose-600 text-white ring-rose-600 dark:bg-rose-500 dark:ring-rose-500',
+  MISMATCH: 'bg-orange-500 text-white ring-orange-500 dark:bg-orange-500 dark:ring-orange-500',
+  EXP_GAP: 'bg-violet-500 text-white ring-violet-500 dark:bg-violet-500 dark:ring-violet-500',
+}
+const HIDEABLE = ['SKIP', 'REJECTED', 'MISMATCH', 'EXP_GAP']
 
 const SOURCE_STYLES = {
   indeed: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
@@ -413,6 +424,8 @@ export default function App() {
         applied: r.count || 0,
         rejected: 0,
         skipped: 0,
+        mismatch: 0,
+        expgap: 0,
       }))
     return []
   }, [stats])
@@ -427,11 +440,16 @@ export default function App() {
       return (
         (stats.applied_this_week ?? 0) +
         (stats.rejected_this_week ?? 0) +
-        (stats.skipped_this_week ?? 0)
+        (stats.skipped_this_week ?? 0) +
+        (stats.mismatch_this_week ?? 0) +
+        (stats.expgap_this_week ?? 0)
       )
     // Fallback: sum the latest chart bucket.
     const last = barData[barData.length - 1]
-    return last ? (last.applied || 0) + (last.rejected || 0) + (last.skipped || 0) : 0
+    return last
+      ? (last.applied || 0) + (last.rejected || 0) + (last.skipped || 0) +
+        (last.mismatch || 0) + (last.expgap || 0)
+      : 0
   }, [stats, barData])
 
   return (
@@ -532,6 +550,16 @@ export default function App() {
             accent="bg-amber-500"
           />
           <StatCard
+            label="Mismatch (all time)"
+            value={stats?.by_status?.MISMATCH ?? 0}
+            accent="bg-orange-500"
+          />
+          <StatCard
+            label="Exp. gap (all time)"
+            value={stats?.by_status?.EXP_GAP ?? 0}
+            accent="bg-violet-500"
+          />
+          <StatCard
             label={`Decided this week (${barData.length} day${barData.length === 1 ? '' : 's'})`}
             value={decidedThisWeek}
             accent="bg-violet-600"
@@ -541,7 +569,7 @@ export default function App() {
         {barData.length > 0 && (
           <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
-              Outcomes per day — applied vs rejected vs skipped
+              Outcomes per day — applied vs rejected vs skipped vs mismatch vs exp. gap
             </h2>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
@@ -566,6 +594,8 @@ export default function App() {
                   <Line type="monotone" dataKey="applied" name="Applied" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="rejected" name="Rejected" stroke="#f43f5e" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="skipped" name="Skipped" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="mismatch" name="Mismatch" stroke="#fb923c" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="expgap" name="Exp. gap" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -665,7 +695,7 @@ export default function App() {
               </option>
             ))}
           </select>
-          {['SKIP', 'REJECTED'].map((s) => {
+          {HIDEABLE.map((s) => {
             const isHidden = hidden.includes(s)
             return (
               <button
@@ -674,9 +704,7 @@ export default function App() {
                 title={isHidden ? `Show ${s} postings` : `Hide ${s} postings`}
                 className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
                   isHidden
-                    ? s === 'REJECTED'
-                      ? 'bg-rose-600 text-white ring-rose-600 dark:bg-rose-500 dark:ring-rose-500'
-                      : 'bg-amber-500 text-white ring-amber-500'
+                    ? HIDE_ACTIVE_STYLES[s]
                     : 'bg-white text-slate-500 ring-slate-300 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-700'
                 }`}
               >
