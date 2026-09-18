@@ -18,7 +18,8 @@ to postings from a browser tab.
 
 ```
 venv/bin/python main.py          scrape -> Postgres (jobs, scrape_runs)
-job-dashboard-api.service         systemd user unit: FastAPI on :8000 (GET /jobs, PATCH, POST /jobs/{id}/apply, /stats, /runs/latest)
+pipeline.py                     shared scrape pipeline (CLI + API button use the same code)
+job-dashboard-api.service         systemd user unit: FastAPI on :8000 (GET /jobs, PATCH, POST /jobs/{id}/apply, /stats, /runs/latest, POST /scrape, GET /scrape/status)
 job-dashboard-web.service         systemd user unit: Vite + React + Tailwind dev server on :5173
 dashboard/                        Vite + React + Tailwind dev server on :5173
 run_and_open.sh                   scrape, ensure both servers, open the dashboard
@@ -59,9 +60,17 @@ with the `DATABASE_URL` env var if you ever point it elsewhere.
 ## 3. Run it
 
 ```bash
-./run_and_open.sh                      # scrape -> ensure API/dashboard -> open browser
+./run_and_open.sh                      # scrape + open dashboard
 ./run_and_open.sh --legacy-xlsx        # also mirror new rows to applications.xlsx
 ```
+
+Or scrape straight from the dashboard: open `http://localhost:5173` and hit
+the **Scrape new jobs** button in the header. It runs the exact same pipeline
+as `main.py` (via `pipeline.py`) in the background — the button shows
+`Scraping…` while it runs, you can keep reviewing in the meantime, and the
+table refreshes automatically with a `+N new` note when it finishes. Starting
+a second scrape while one is running returns `409` and the button waits for
+the in-flight run instead.
 
 Or run the pieces by hand if you'd rather not use systemd:
 
@@ -99,7 +108,10 @@ tails `runs.log`.
 
 ## 4. Review and apply
 
-Open the dashboard and check the **NEW** rows:
+Open the dashboard and check the **NEW** rows. Use the **Scrape new jobs**
+button in the header whenever you want fresh postings — no need to rerun
+`main.py` or `run_and_open.sh` from a terminal; duplicates are skipped, so
+re-scraping is always safe.
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
   `REJECTED` directly. Moving to `APPLIED` stamps `applied_at`; moving away
@@ -142,6 +154,12 @@ file upload is attempted.
   merged `outcome_series` (`[{date, applied, rejected, skipped}]`, one point
   per day) for the graph.
 - `GET /runs/latest` — most recent `scrape_runs` row.
+- `POST /scrape` — start a scrape in the background (same code as
+  `venv/bin/python main.py`); `409` if one is already running. Optional body
+  `{"legacy_xlsx": true}` mirrors to `applications.xlsx`.
+- `GET /scrape/status` — `idle | running | done | error` plus `added` /
+  `scraped` counts and the run `summary`; the dashboard polls this while the
+  **Scrape new jobs** button shows `Scraping…`.
 - Interactive docs at `http://127.0.0.1:8000/docs`.
 
 ## Feedback learner (scraper learns from your decisions)

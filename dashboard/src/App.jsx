@@ -94,6 +94,8 @@ export default function App() {
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState([])
   const [pendingApply, setPendingApply] = useState(null)
+  const [scraping, setScraping] = useState(false)
+  const [scrapeNote, setScrapeNote] = useState('')
 
   const toggleHidden = useCallback((s) => {
     setHidden((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
@@ -206,6 +208,48 @@ export default function App() {
     [updateJobs]
   )
 
+  const handleScrape = useCallback(async () => {
+    if (scraping) return
+    setScraping(true)
+    setScrapeNote('Starting scrape…')
+    try {
+      const startRes = await fetch(`${API}/scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (startRes.status === 409) {
+        setScrapeNote('A scrape is already running — waiting for it to finish…')
+      } else if (!startRes.ok) {
+        throw new Error(`scrape start failed (${startRes.status})`)
+      } else {
+        setScrapeNote('Scraping new jobs… you can keep reviewing while it runs.')
+      }
+      // Poll until the background scrape finishes, then refresh.
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000))
+        const sRes = await fetch(`${API}/scrape/status`)
+        const s = await sRes.json()
+        if (s.state === 'running' || s.state === 'idle') {
+          continue
+        }
+        if (s.state === 'done') {
+          setScrapeNote(
+            s.added != null ? `Scrape finished: +${s.added} new (${s.scraped ?? 0} checked)` : 'Scrape finished.'
+          )
+        } else {
+          setScrapeNote(s.error ? `Scrape failed: ${s.error}` : 'Scrape failed.')
+        }
+        break
+      }
+    } catch (e) {
+      console.error('scrape trigger failed:', e)
+      setScrapeNote('Could not start scrape — is the API running?')
+    }
+    await fetchAll()
+    setScraping(false)
+  }, [scraping, fetchAll])
+
   const barData = useMemo(() => {
     if (stats?.outcome_series?.length) return stats.outcome_series
     // Back-compat with older /stats that only sent applied_series.
@@ -267,6 +311,14 @@ export default function App() {
               </span>
             )}
             <button
+              onClick={handleScrape}
+              disabled={scraping}
+              title="Scrape new jobs now (same as running main.py)"
+              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              {scraping ? 'Scraping…' : 'Scrape new jobs'}
+            </button>
+            <button
               onClick={() => setDark((d) => !d)}
               className="rounded-lg border border-slate-300 bg-slate-100 p-2 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
               title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -291,6 +343,11 @@ export default function App() {
             </button>
           </div>
         </div>
+        {scrapeNote && (
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400" role="status">
+            {scrapeNote}
+          </p>
+        )}
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-6">
