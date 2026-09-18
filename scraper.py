@@ -20,27 +20,54 @@ def load_config(path="config.yaml"):
         return yaml.safe_load(f)
 
 
-# Matches explicit years-of-experience requirements like:
-#   "3-5 years experience", "2+ years of experience", "at least 3 years
-#   experience", "minimum 5 years of relevant experience".
-# We take the worst case (upper end of any range) and require the word
-# "experience" to follow within a few words, so things like "25 years in
-# business" don't nuke junior roles.
+# Shared year-word: full, abbreviated ("3 yrs"), possessive ("5 years'")
+# and acronym ("3 YOE") forms all appear in real postings. Ends with a
+# letter-lookahead instead of \b -- there is no word boundary between a
+# possessive apostrophe and the following space ("years' experience").
+_YEAR = r"(?:years?['\u2019]?|yrs?|y\.?o\.?e\.?)(?![A-Za-z])"
+# Filler words between the year and "experience" ("of relevant",
+# "hands-on" -- hyphens included, they broke the old \w+ filler).
+_FILL = r"(?:\s+[\w-]+){0,4}\s+"
+# Work nouns that imply experience even when the literal word
+# "experience" is absent ("3 years of backend development",
+# "2 years exposure in IT support"). Deliberately narrow -- words like
+# "business" or "warranty" must NOT match ("25 years in business").
+_WORK_NOUN = (
+    r"(?:experience|work|employment|development|engineering|programming|"
+    r"coding|exposure|testing|design|support|administration|operations)"
+)
+
 _MAX_EXP_PAT = re.compile(
-    r"(\d{1,2})\b(?:\s*[-–to]+\s*(\d{1,2}))?\s*\+?\s*years?\b"
-    r"(?:\s+\w+){0,4}\s+experience\b",
+    rf"(\d{{1,2}})\b(?:\s*[-–to]+\s*(\d{{1,2}}))?\s*\+?\s*{_YEAR}{_FILL}experience\b",
     re.IGNORECASE,
 )
 
-# Catch the flipped phrasing: "experience of 3 years", "experience with 2+ years"
+# Catch the flipped phrasing: "experience of 3 years", "experience: 3 years".
 _EXP_FIRST_PAT = re.compile(
-    r"experience\s+(?:of|with|for|in)?\s*(\d{1,2})\b\s*\+?\s*years?\b",
+    rf"experience\s*[:\-]?\s*(?:of|with|for|in)?\s*(\d{{1,2}})\b\s*\+?\s*{_YEAR}",
     re.IGNORECASE,
 )
 
-# Catch "3 or more years of experience" / "3 plus years experience"
+# Catch "3 or more years of experience" / "3 plus years experience".
 _EXP_OR_MORE_PAT = re.compile(
-    r"(\d{1,2})\s+(?:or\s+more|plus)\s+years?\b(?:\s+\w+){0,4}\s+experience\b",
+    rf"(\d{{1,2}})\s+(?:or\s+more|plus)\s*{_YEAR}{_FILL}experience\b",
+    re.IGNORECASE,
+)
+
+# Catch requirement phrasing with no literal "experience":
+# "3 years of backend development", "at least 3 years in software
+# development", "3 yrs related work", "2 years exposure in IT support".
+_EXP_WORK_NOUN_PAT = re.compile(
+    rf"(\d{{1,2}})\s*\+?\s*{_YEAR}\s+(?:of\s+|in\s+)?(?:[\w-]+\s+){{0,2}}{_WORK_NOUN}\b",
+    re.IGNORECASE,
+)
+
+# Catch a bare year-acronym with nothing after it ("Senior QA with 4+
+# YOE"). YOE is unambiguous so the plus is optional; bare "yrs" still
+# needs the plus ("3+ yrs") to avoid matching stray durations.
+_EXP_BARE_PAT = re.compile(
+    r"(\d{1,2})\s*\+?\s*y\.?o\.?e\.?(?![A-Za-z])"
+    r"|(\d{1,2})\s*\+\s*yrs?(?![A-Za-z])",
     re.IGNORECASE,
 )
 
@@ -66,6 +93,10 @@ def max_experience_years(text) -> float | None:
         values.append(int(m.group(1)))
     for m in _EXP_OR_MORE_PAT.finditer(low):
         values.append(int(m.group(1)))
+    for m in _EXP_WORK_NOUN_PAT.finditer(low):
+        values.append(int(m.group(1)))
+    for m in _EXP_BARE_PAT.finditer(low):
+        values.extend(int(v) for v in m.groups() if v)
     return float(max(values)) if values else None
 
 

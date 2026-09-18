@@ -454,7 +454,35 @@ def extract_bank(path: str) -> dict:
             extra[key] = [t for t, *_ in flat_infos]
     if extra:
         bank["extra_sections"] = extra
+    _hoist_education_links(bank)
     return bank
+
+
+def _hoist_education_links(bank: dict):
+    """Move bare URLs out of education degree text (e.g. a "Portfolio:
+    <url>" line under a school) into contact links, where the tailor
+    prompt and renderer expect them. Keeps degree strings clean."""
+    contact = bank.get("contact", {})
+    for entry in bank.get("education", []):
+        degree = entry.get("degree", "")
+        urls = [u for u in _URL_PAT.findall(degree)
+                if "://" in u or u.startswith("www.")]
+        if not urls:
+            continue
+        for url in urls:
+            if not any(l.get("url") == url for l in contact.get("links", [])):
+                label = "Portfolio"
+                low_url = url.lower()
+                if "linkedin" in low_url:
+                    label = "Linkedin"
+                elif "github.io" not in low_url and "github" in low_url:
+                    label = "Github"
+                contact.setdefault("links", []).append(
+                    {"label": label, "url": url})
+            degree = degree.replace(url, "")
+        degree = re.sub(r"\b(portfolio|website|site)\s*:\s*", "",
+                        degree, flags=re.IGNORECASE)
+        entry["degree"] = re.sub(r"\s{2,}", " ", degree).strip(" ;")
 
 
 def main(path: str, out_path: str = "resume_bank.extracted.yaml"):

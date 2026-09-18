@@ -87,6 +87,13 @@ def render(contact: dict, tailored: dict, out_dir: str, job_title: str,
                 f"{job.get('title', '')} — {job.get('company', '')}")
             run.bold = True
             run.font.size = Pt(11)
+            meta = " | ".join(b for b in [
+                job.get("location", ""),
+                " – ".join(d for d in [job.get("start_date", ""),
+                                       job.get("end_date", "")] if d),
+            ] if b)
+            if meta:
+                _body(doc, meta, italic=True)
             for b in job.get("bullets", []):
                 _body(doc, b, bullet=True)
 
@@ -94,8 +101,16 @@ def render(contact: dict, tailored: dict, out_dir: str, job_title: str,
     if bank_edu:
         _heading(doc, "Education")
         for e in bank_edu:
-            _body(doc, f"{e.get('degree', '')}, {e.get('school', '')} "
-                       f"({e.get('graduation', '')})".strip(" ,()"))
+            if isinstance(e, dict):
+                _body(doc, f"{e.get('degree', '')}, {e.get('school', '')} "
+                           f"({e.get('graduation', '')})".strip(" ,()"))
+            else:
+                _body(doc, str(e))
+
+    if tailored.get("certifications"):
+        _heading(doc, "Certifications")
+        for c in tailored["certifications"]:
+            _body(doc, c if isinstance(c, str) else str(c), bullet=True)
 
     for key, title in (("soft_skills", "Soft Skills"),
                        ("languages", "Languages"),

@@ -946,6 +946,11 @@ export default function App() {
                     <div key={i} className="mt-2">
                       <p className="font-medium text-slate-600 dark:text-slate-400">
                         {j.title} — {j.company}
+                        {(j.location || j.start_date) && (
+                          <span className="font-normal text-slate-500 dark:text-slate-500">
+                            {' '}({[j.location, [j.start_date, j.end_date].filter(Boolean).join(' – ')].filter(Boolean).join(' | ')})
+                          </span>
+                        )}
                       </p>
                       <ul className="list-disc pl-5 text-slate-600 dark:text-slate-400">
                         {j.bullets.map((b, k) => (

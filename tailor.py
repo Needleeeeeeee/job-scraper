@@ -139,12 +139,17 @@ def suggest_skills(bank: dict, job_description: str,
 
 TAILOR_SYSTEM = """You tailor a resume to a specific job posting by SELECTING and REORDERING the candidate's real content. Hard rules:
 - NEVER invent achievements, numbers, tools, employers, dates, or responsibilities not implied by the bank text. If the posting asks for something absent from the bank, leave it out -- do not fabricate it.
-- Reword bullets only lightly (mirror the posting's terminology); keep every bullet truthful to its original.
+- Echo company, title, location, start_date, end_date, school, degree, and graduation EXACTLY as written in the bank. Rewording is allowed ONLY inside bullet text, and only lightly (mirror the posting's terminology) while staying truthful to the original bullet.
+- Include ALL education entries and ALL languages: none of them are posting-specific.
 - Reply with STRICT JSON only, exactly this shape, nothing else:
 {"summary": "string",
  "skills": [{"group": "string", "items": ["string", ...]}, ...],
- "experience": [{"company": "string", "title": "string",
+ "experience": [{"company": "string", "title": "string", "location": "string",
+                 "start_date": "string", "end_date": "string",
                  "bullets": ["string", ...]}, ...],
+ "education": [{"school": "string", "degree": "string", "graduation": "string"}],
+ "languages": ["string", ...],
+ "certifications": ["string", ...],
  "soft_skills": ["string", ...]}"""
 
 
@@ -156,10 +161,17 @@ def tailor_resume(cfg: dict, bank: dict, job_title: str, job_company: str,
         "skills": bank.get("skills", []),
         "experience": [
             {"company": j.get("company", ""), "title": j.get("title", ""),
+             "location": j.get("location", ""),
+             "start_date": j.get("start_date", ""),
+             "end_date": j.get("end_date", ""),
              "bullets": [b.get("text", "") if isinstance(b, dict) else str(b)
                          for b in j.get("bullets", [])]}
             for j in bank.get("experience", [])
         ],
+        "education": bank.get("education", []),
+        "certifications": bank.get("certifications", []),
+        "languages": bank.get("languages", []),
+        "interests": bank.get("interests", []),
         "soft_skills": bank.get("soft_skills", []),
     }
     job_text = (f"Title: {job_title}\nCompany: {job_company}\n\n"
