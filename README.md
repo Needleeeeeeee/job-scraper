@@ -224,6 +224,12 @@ sites change something.
   mention years is kept; one that says "20 years in business" near the
   word "experience" could get dropped. Review rows in the dashboard as
   needed.
+- Title relevance is gated by `search.include_title_keywords` in
+  `config.yaml` (a posting whose title contains none of them is dropped),
+  because boards — JobStreet most of all — return loosely-related results
+  for broad terms. Borderline keepers (e.g. BPO chat/voice support roles
+  matching "support") still come through; SKIP them once and the feedback
+  learner will filter their kind next run.
 - `apply_helper.py` fills forms, it never clicks final submit — some ATS
   platforms (Workday especially) actively detect and block automation, so
   keep this manual step.

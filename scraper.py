@@ -163,8 +163,8 @@ def apply_keyword_filters(df: pd.DataFrame, s: dict) -> pd.DataFrame:
         low = title.lower()
         if any(k.lower() in low for k in s.get("exclude_title_keywords", [])):
             return False
-        levels = s.get("experience_level_keywords", [])
-        if levels and not any(k.lower() in low for k in levels):
+        includes = s.get("include_title_keywords", [])
+        if includes and not any(k.lower() in low for k in includes):
             return False
         return True
 

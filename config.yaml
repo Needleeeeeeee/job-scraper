@@ -51,7 +51,7 @@ search:
   hours_old: 672
 
   # Max results pulled per search term per job board
-  results_wanted: 50
+  results_wanted: 100
 
   # LinkedIn listings don't include the description until jobspy visits each
   # posting. Keep this true or descriptions come back empty and the
@@ -75,6 +75,49 @@ search:
     - "staff"
     - "manager"
     - "director"
+
+  # REQUIRED relevance gate: the title must contain at least one of these
+  # (case-insensitive substring), or the posting is dropped. Job boards do
+  # loose relevance matching -- without this, searches like "Fresh Graduate
+  # IT" return Trucking Coordinators, Radiologic Technologists, and Hotel
+  # Receptionists, and JobStreet in particular returns the same generic soup
+  # for every term. Empty list disables the gate (keeps everything).
+  include_title_keywords:
+    - "developer"
+    - "software"
+    - "programmer"
+    - "engineer"
+    - "web"
+    - "mobile"
+    - "frontend"
+    - "front-end"
+    - "backend"
+    - "back-end"
+    - "fullstack"
+    - "full stack"
+    - "full-stack"
+    - "data"
+    - "python"
+    - "java"
+    - "qa"
+    - "tester"
+    - "devops"
+    - "cloud"
+    - "support"
+    - "helpdesk"
+    - "help desk"
+    - "service desk"
+    - "desktop"
+    - "technician"
+    - "trainee"
+    - "graduate"
+    - "apprentice"
+    - "cadet"
+    - "systems"
+    - "analyst"
+    - "architect"
+    - "consultant"
+    - "specialist"
 
   exclude_company_keywords: []
 
