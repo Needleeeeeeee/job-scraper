@@ -1,8 +1,10 @@
 # Job Search Scraper + Dashboard
 
-Scrape pipeline + local web dashboard: scrapes Indeed, LinkedIn, and JobStreet
-for junior/entry-level roles in Metro Manila, applies keyword +
-years-of-experience filters, dedupes, and stores new leads in **Postgres**.
+Scrape pipeline + local web dashboard: scrapes Indeed, LinkedIn (via JobSpy)
+and JobStreet (via Playwright/Chromium) for junior/entry-level roles in
+Metro Manila, applies keyword + years-of-experience filters, dedupes, and
+stores new leads in **Postgres**. Additional JobSpy boards (e.g. Glassdoor,
+Google Jobs) can be enabled in `config.yaml`; see [Job boards](#job-boards).
 A **FastAPI** backend + **React/Tailwind** dashboard let you review and apply
 to postings from a browser tab.
 
@@ -217,6 +219,38 @@ If you still hit a 400 after both fixes, run
 jobspy's GitHub issues for your exact site — its scrapers reverse-engineer
 LinkedIn/Indeed's internal APIs, so they occasionally break when those
 sites change something.
+
+## Job boards
+
+Current default (`config.yaml` → `search.site_names`): `indeed`, `linkedin`
+(JobSpy), plus `jobstreet` (custom Playwright scraper in `jobstreet.py`,
+since JobSpy has no JobStreet provider).
+
+Adding more boards is a one-line config change — `scraper.py` forwards any
+JobSpy site name through to `scrape_jobs`. JobSpy supports `linkedin`,
+`indeed`, `glassdoor`, `google`, `zip_recruiter`, `bayt`, `naukri`, `bdjobs`.
+
+For a Metro Manila search, worth trying vs. skip:
+
+- Try: `glassdoor` (thin PH coverage, mirrors a lot of Indeed), `google`
+  (global aggregator, sometimes finds PH SMBs Indeed misses — note
+  `scraper.py` doesn't pass `google_search_term` yet, so its filtering is
+  looser).
+- Skip: `zip_recruiter` (US/CA only), `bayt` / `naukri` / `bdjobs`
+  (Middle East / India / Bangladesh focus).
+
+Redundancy: safe but not free. Exact re-scrapes are skipped (normalized
+`job_url` dedupe in-run in `scraper.py`, `UNIQUE(url)` + title/company
+fallback in `db.py`), so extra boards never duplicate rows. But the same
+role cross-posted on two boards has different URLs and will show up twice
+(same as Indeed+LinkedIn overlap today) — Google Jobs increases this most
+since it aggregates other boards. Each board also adds scrape time and a
+little more 400/ban risk from JobSpy's reverse-engineered APIs.
+
+Higher-signal than more JobSpy boards for junior Manila tech roles: wire up
+`config.yaml`'s `company_boards` placeholder (Greenhouse/Lever direct ATS
+JSON — stabler than scraping) or add PH-specific Playwright scrapers in the
+style of `jobstreet.py` (e.g. Kalibrr, Bossjob).
 
 ## Notes / limits
 
