@@ -103,7 +103,9 @@ Open the dashboard and check the **NEW** rows:
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
   `REJECTED` directly. Moving to `APPLIED` stamps `applied_at`; moving away
-  from it clears `applied_at` so the chart stays accurate.
+  from it clears `applied_at` so the chart stays accurate. Every change is
+  also recorded in `job_status_history` with a timestamp, which powers the
+  applied-vs-rejected-vs-skipped graph and the scraper's feedback learner.
 - **Apply** button opens the job URL in a new tab of your existing browser
   (`window.open`) and persists the row as `REVIEWED` (so the change survives
   a tab reload). Flip it to `APPLIED` manually after you've finished the
@@ -112,6 +114,9 @@ Open the dashboard and check the **NEW** rows:
 - **Search** filters live as you type. A plain query matches **title or
   company**; prefix it with `title:` to restrict the match to job titles
   only (e.g. `title:python`). Matching text is highlighted in the table.
+- **Negative filter-out tags:** the `✕ SKIP (n)` / `✕ REJECTED (n)` pills
+  next to the status dropdown hide those postings from the table (counts
+  shown). Picking an explicit status in the dropdown overrides them.
 
 `apply_helper.py` is unchanged in purpose but is no longer triggered by the
 dashboard (Apply now just opens a new tab). It's still there for manual CLI
@@ -132,9 +137,40 @@ file upload is attempted.
   `APPLIED`, clears it when moving to any other status.
 - `POST /jobs/{id}/apply` — resolves the job's URL (the dashboard opens it
   in a new tab; no browser automation).
-- `GET /stats` — counts by status/source, new-this-week, applied-over-time.
+- `GET /stats` — counts by status/source, new-this-week, per-outcome this-week
+  counters, plus `applied_series`, `rejected_series`, `skipped_series` and a
+  merged `outcome_series` (`[{week, applied, rejected, skipped}]`) for the graph.
 - `GET /runs/latest` — most recent `scrape_runs` row.
 - Interactive docs at `http://127.0.0.1:8000/docs`.
+
+## Feedback learner (scraper learns from your decisions)
+
+Marking postings `REJECTED` / `SKIP` (vs `APPLIED` / `REVIEWED`) teaches the
+next scrape what to drop, via `feedback.py` (see `config.yaml` → `feedback:`):
+
+- **Heuristic (no API needed):** once you have `min_samples` decided jobs
+  (default 10), title tokens, two-word phrases, and companies you
+  overwhelmingly reject (e.g. `salesforce`, `power platform`, a staffing
+  firm you always skip) are auto-excluded from new scrapes. `SKIP` counts
+  exactly like `REJECTED` — a skip means "not relevant". Thresholds
+  (`min_hits`, `min_reject_rate`, `min_phrase_hits`, ...) are tunable;
+  set `enabled: false` to turn off.
+- **AI (needs a key in `.env`):** when `use_ai` is true and a key exists
+  (`GROQ_API_KEY`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, or
+  `GEMINI_API_KEY` — auto-picked in that order, or pin one with
+  `ai_provider`), the new batch is checked against GOOD/BAD examples by
+  an LLM and matching postings are dropped. Any failure degrades to
+  heuristic-only; the learner never breaks a scrape.
+- **Cost:** at most **one AI call per scrape**, capped at
+  `max_jobs_per_ai_call` postings (default 60). Measured on real data, a
+  full call is ~1.8k input + ~0.5k output ≈ **~2.3k tokens/scrape**
+  worst case (fewer with small batches) — effectively $0 on the free
+  tiers (Groq / OpenRouter free models / Gemini Flash).
+- **Rate limiter:** each scoring call is spaced by
+  `min_seconds_between_calls` and counted against daily
+  `max_ai_calls_per_day` / `max_ai_tokens_per_day` budgets tracked in
+  `usage_state.json` (gitignored, resets daily). Over budget → the scrape
+  continues heuristic-only with a log line.
 
 This is a local single-user tool: no auth, no cloud deployment. CORS is
 limited to localhost origins.

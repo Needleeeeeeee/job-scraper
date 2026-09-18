@@ -49,25 +49,40 @@ def list_jobs(
 @router.patch("/{job_id}", response_model=Job)
 def update_status(job_id: int, body: JobStatusUpdate):
     with db.connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT status FROM jobs WHERE id = %s", (job_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="job not found")
+        old_status = row[0]
         if body.status == "APPLIED":
             cur.execute(
                 """
-                UPDATE jobs SET status = %s, applied_at = %s
+                UPDATE jobs SET status = %s, applied_at = %s, status_updated_at = %s
                 WHERE id = %s RETURNING *
                 """,
-                (body.status, datetime.now(timezone.utc), job_id),
+                (body.status, datetime.now(timezone.utc),
+                 datetime.now(timezone.utc), job_id),
             )
         else:
             cur.execute(
                 """
-                UPDATE jobs SET status = %s, applied_at = NULL
+                UPDATE jobs SET status = %s, applied_at = NULL, status_updated_at = %s
                 WHERE id = %s RETURNING *
                 """,
-                (body.status, job_id),
+                (body.status, datetime.now(timezone.utc), job_id),
             )
         row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="job not found")
+        cols = [d.name for d in cur.description]
+        result = dict(zip(cols, row))
+        if old_status != body.status:
+            cur.execute(
+                """
+                INSERT INTO job_status_history (job_id, old_status, new_status)
+                VALUES (%s, %s, %s)
+                """,
+                (job_id, old_status, body.status),
+            )
         conn.commit()
-    if not row:
-        raise HTTPException(status_code=404, detail="job not found")
-    cols = [d.name for d in cur.description]
-    return dict(zip(cols, row))
+        return result

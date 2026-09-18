@@ -7,4 +7,4 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from db import connect, upsert_job, record_run, find_existing  # noqa: F401,E402
-from db import DATABASE_URL  # noqa: F401,E402
+from db import DATABASE_URL, ensure_tracking_schema, record_status_change  # noqa: F401,E402

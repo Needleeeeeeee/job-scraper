@@ -8,8 +8,22 @@ CREATE TABLE IF NOT EXISTS jobs (
   date_posted DATE,
   status TEXT NOT NULL DEFAULT 'NEW',  -- NEW/REVIEWED/APPLIED/SKIP/REJECTED
   scraped_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  applied_at TIMESTAMPTZ
+  applied_at TIMESTAMPTZ,
+  status_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()  -- last dashboard decision time
 );
+
+-- Audit trail of every dashboard status change. Powers the
+-- rejected/skipped/applied-over-time graph and the feedback learner
+-- (scraper learns which titles/companies you reject/skip).
+CREATE TABLE IF NOT EXISTS job_status_history (
+  id SERIAL PRIMARY KEY,
+  job_id INT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  old_status TEXT,
+  new_status TEXT NOT NULL,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_status_history_job_id_idx ON job_status_history(job_id);
+CREATE INDEX IF NOT EXISTS job_status_history_changed_at_idx ON job_status_history(changed_at);
 
 CREATE TABLE IF NOT EXISTS scrape_runs (
   id SERIAL PRIMARY KEY,

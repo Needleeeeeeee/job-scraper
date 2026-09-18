@@ -152,6 +152,7 @@ def scrape(cfg: dict) -> pd.DataFrame:
         combined = combined.drop_duplicates(subset=["title", "company", "location"])
 
     combined = apply_keyword_filters(combined, s)
+    combined = apply_feedback_filter(combined, cfg)
     return combined.reset_index(drop=True)
 
 
@@ -186,6 +187,24 @@ def apply_keyword_filters(df: pd.DataFrame, s: dict) -> pd.DataFrame:
     if "description" in df.columns:
         mask = mask & df["description"].apply(experience_ok)
     return df[mask]
+
+
+def apply_feedback_filter(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Drop postings resembling past REJECTED/SKIP dashboard decisions.
+
+    See feedback.py. Best-effort: any error returns the input unchanged so
+    a broken learner can never break a scrape.
+    """
+    try:
+        import feedback
+        before = len(df)
+        out = feedback.apply_feedback(df, cfg)
+        if out is not None and len(out) != before:
+            print(f"[scraper] feedback filter: {before} -> {len(out)} jobs")
+        return out if out is not None else df
+    except Exception as e:
+        print(f"[scraper] WARNING: feedback filter failed ({e}); keeping all jobs.")
+        return df
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ class Job(BaseModel):
     status: str
     scraped_at: datetime
     applied_at: datetime | None = None
+    status_updated_at: datetime | None = None
 
 
 class JobStatusUpdate(BaseModel):

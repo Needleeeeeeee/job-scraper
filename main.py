@@ -93,6 +93,10 @@ def main():
 
     started = datetime.now(timezone.utc)
     cfg = load_config()
+    try:
+        db.ensure_tracking_schema()
+    except Exception as e:
+        print(f"[main] WARNING: tracking migration failed: {e}")
     jobs = scrape(cfg)
     print(f"[main] {len(jobs)} jobs after scraping + filters")
     if jobs.empty:

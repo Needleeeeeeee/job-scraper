@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -91,7 +92,12 @@ export default function App() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState('')
+  const [hidden, setHidden] = useState([])
   const [pendingApply, setPendingApply] = useState(null)
+
+  const toggleHidden = useCallback((s) => {
+    setHidden((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }, [])
 
   const fetchAll = useCallback(async () => {
     try {
@@ -131,6 +137,9 @@ export default function App() {
     const { titleOnly, q } = parsedSearch
     return jobs.filter((job) => {
       if (status && job.status !== status) return false
+      // Negative filter-out tags: hidden statuses apply only when no
+      // explicit status is selected (the dropdown takes precedence).
+      if (!status && hidden.includes(job.status)) return false
       if (source && job.source !== source) return false
       if (dateFrom && String(job.date_posted || '').slice(0, 10) < dateFrom) return false
       if (dateTo && String(job.date_posted || '').slice(0, 10) > dateTo) return false
@@ -141,7 +150,13 @@ export default function App() {
       }
       return true
     })
-  }, [jobs, status, source, dateFrom, dateTo, parsedSearch])
+  }, [jobs, status, hidden, source, dateFrom, dateTo, parsedSearch])
+
+  const hiddenCounts = useMemo(() => {
+    const counts = {}
+    for (const job of jobs) counts[job.status] = (counts[job.status] || 0) + 1
+    return counts
+  }, [jobs])
 
   const updateJobs = useCallback(
     (id, patch) => {
@@ -191,10 +206,35 @@ export default function App() {
     [updateJobs]
   )
 
-  const barData = useMemo(
-    () => (stats?.applied_series?.length ? stats.applied_series : []),
-    [stats]
-  )
+  const barData = useMemo(() => {
+    if (stats?.outcome_series?.length) return stats.outcome_series
+    // Back-compat with older /stats that only sent applied_series.
+    if (stats?.applied_series?.length)
+      return stats.applied_series.map((r) => ({
+        week: r.week,
+        applied: r.count || 0,
+        rejected: 0,
+        skipped: 0,
+      }))
+    return []
+  }, [stats])
+
+  const decidedThisWeek = useMemo(() => {
+    if (!stats) return 0
+    if (
+      stats.applied_this_week !== undefined ||
+      stats.rejected_this_week !== undefined ||
+      stats.skipped_this_week !== undefined
+    )
+      return (
+        (stats.applied_this_week ?? 0) +
+        (stats.rejected_this_week ?? 0) +
+        (stats.skipped_this_week ?? 0)
+      )
+    // Fallback: sum the latest chart bucket.
+    const last = barData[barData.length - 1]
+    return last ? (last.applied || 0) + (last.rejected || 0) + (last.skipped || 0) : 0
+  }, [stats, barData])
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200">
@@ -254,7 +294,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-6">
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <StatCard
             label="Total tracked"
             value={jobs.length}
@@ -271,8 +311,18 @@ export default function App() {
             accent="bg-emerald-600"
           />
           <StatCard
-            label={`Applied this week (${barData.length} wk${barData.length === 1 ? '' : 's'})`}
-            value={barData.reduce((a, b) => a + (b.count || 0), 0)}
+            label="Rejected (all time)"
+            value={stats?.by_status?.REJECTED ?? 0}
+            accent="bg-rose-600"
+          />
+          <StatCard
+            label="Skipped (all time)"
+            value={stats?.by_status?.SKIP ?? 0}
+            accent="bg-amber-500"
+          />
+          <StatCard
+            label={`Decided this week (${barData.length} wk${barData.length === 1 ? '' : 's'})`}
+            value={decidedThisWeek}
             accent="bg-violet-600"
           />
         </section>
@@ -280,7 +330,7 @@ export default function App() {
         {barData.length > 0 && (
           <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
-              Applications submitted over time
+              Outcomes over time — applied vs rejected vs skipped
             </h2>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
@@ -288,10 +338,12 @@ export default function App() {
                   <CartesianGrid strokeDasharray="3 3" stroke={dark ? '#334155' : '#e2e8f0'} />
                   <XAxis
                     dataKey="week"
+                    tickFormatter={(v) => String(v).slice(5, 10)}
                     tick={{ fontSize: 12, fill: dark ? '#94a3b8' : '#64748b' }}
                   />
                   <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: dark ? '#94a3b8' : '#64748b' }} />
                   <Tooltip
+                    labelFormatter={(v) => String(v).slice(0, 10)}
                     contentStyle={{
                       backgroundColor: dark ? '#1e293b' : '#fff',
                       border: dark ? '1px solid #334155' : '1px solid #e2e8f0',
@@ -299,7 +351,10 @@ export default function App() {
                       color: dark ? '#e2e8f0' : '#1e293b',
                     }}
                   />
-                  <Bar dataKey="count" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="applied" name="Applied" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="rejected" name="Rejected" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="skipped" name="Skipped" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -319,6 +374,25 @@ export default function App() {
               </option>
             ))}
           </select>
+          {['SKIP', 'REJECTED'].map((s) => {
+            const isHidden = hidden.includes(s)
+            return (
+              <button
+                key={s}
+                onClick={() => toggleHidden(s)}
+                title={isHidden ? `Show ${s} postings` : `Hide ${s} postings`}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
+                  isHidden
+                    ? s === 'REJECTED'
+                      ? 'bg-rose-600 text-white ring-rose-600 dark:bg-rose-500 dark:ring-rose-500'
+                      : 'bg-amber-500 text-white ring-amber-500'
+                    : 'bg-white text-slate-500 ring-slate-300 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-700'
+                }`}
+              >
+                {isHidden ? '✕' : '◌'} {s} ({hiddenCounts[s] || 0})
+              </button>
+            )
+          })}
           <select
             value={source}
             onChange={(e) => setSource(e.target.value)}
