@@ -99,25 +99,42 @@ export default function App() {
   const [scraping, setScraping] = useState(false)
   const [scrapeNote, setScrapeNote] = useState('')
 
+  const [resumes, setResumes] = useState([])
+  const [defaultResume, setDefaultResume] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadNote, setUploadNote] = useState('')
+  const [dragActive, setDragActive] = useState(false)
+
+  const [tailorJob, setTailorJob] = useState(null)
+  const [tailorText, setTailorText] = useState('')
+  const [tailorResume, setTailorResume] = useState('')
+  const [tailorResult, setTailorResult] = useState(null)
+  const [tailorLoading, setTailorLoading] = useState(false)
+  const [tailorError, setTailorError] = useState('')
+
   const toggleHidden = useCallback((s) => {
     setHidden((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
   }, [])
 
   const fetchAll = useCallback(async () => {
     try {
-      const [jobsRes, statsRes, runRes] = await Promise.all([
+      const [jobsRes, statsRes, runRes, resumesRes] = await Promise.all([
         fetch(API + '/jobs'),
         fetch(API + '/stats'),
         fetch(API + '/runs/latest'),
+        fetch(API + '/resumes'),
       ])
-      const [j, st, r] = await Promise.all([
+      const [j, st, r, res] = await Promise.all([
         jobsRes.json(),
         statsRes.json(),
         runRes.json(),
+        resumesRes.json().catch(() => ({ resumes: [], default: '' })),
       ])
       setJobs(j)
       setStats(st)
       setLastRun(r)
+      setResumes(res.resumes || [])
+      setDefaultResume(res.default || '')
     } catch (e) {
       console.error('dashboard fetch failed:', e)
     } finally {
@@ -251,6 +268,141 @@ export default function App() {
     await fetchAll()
     setScraping(false)
   }, [scraping, fetchAll])
+
+  const uploadResumes = useCallback(
+    async (files) => {
+      const docs = [...(files || [])].filter((f) => /\.docx$/i.test(f.name))
+      if (!docs.length) {
+        setUploadNote('Drop a .docx resume file.')
+        return
+      }
+      setUploading(true)
+      setUploadNote('')
+      try {
+        for (const f of docs) {
+          const form = new FormData()
+          form.append('file', f)
+          const r = await fetch(API + '/resumes/upload', {
+            method: 'POST',
+            body: form,
+          })
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}))
+            throw new Error(err.detail || `upload failed (${r.status})`)
+          }
+          const entry = await r.json()
+          setUploadNote(
+            `Added ${entry.name}: ${entry.jobs} jobs, ${entry.bullets} bullets parsed.`
+          )
+        }
+      } catch (e) {
+        console.error('resume upload failed:', e)
+        setUploadNote(`Upload failed: ${e.message}`)
+      }
+      await fetchAll()
+      setUploading(false)
+    },
+    [fetchAll]
+  )
+
+  const chooseDefaultResume = useCallback(
+    async (name) => {
+      try {
+        await fetch(API + '/resumes/default', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        })
+        setDefaultResume(name)
+      } catch (e) {
+        console.error('default resume update failed:', e)
+      }
+    },
+    []
+  )
+
+  const removeResume = useCallback(
+    async (name) => {
+      if (!window.confirm(`Delete resume "${name}" from the library?`)) return
+      try {
+        await fetch(`${API}/resumes/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+        })
+      } catch (e) {
+        console.error('resume delete failed:', e)
+      }
+      await fetchAll()
+    },
+    [fetchAll]
+  )
+
+  const openTailor = useCallback(
+    (job) => {
+      setTailorJob(job)
+      setTailorResult(null)
+      setTailorError('')
+      setTailorResume(defaultResume || (resumes[0] && resumes[0].name) || '')
+      setTailorText(
+        `Title: ${job.title || ''}\nCompany: ${job.company || ''}\n` +
+          `Location: ${job.location || ''}\nURL: ${job.url || ''}\n\n` +
+          `--- paste the full posting description below this line ---\n`
+      )
+    },
+    [defaultResume, resumes]
+  )
+
+  const runTailor = useCallback(async () => {
+    if (!tailorJob || tailorLoading) return
+    setTailorLoading(true)
+    setTailorError('')
+    setTailorResult(null)
+    try {
+      const r = await fetch(`${API}/jobs/${tailorJob.id}/tailor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume: tailorResume, job_text: tailorText }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || `tailoring failed (${r.status})`)
+      setTailorResult(data)
+    } catch (e) {
+      console.error('tailor failed:', e)
+      setTailorError(e.message)
+    }
+    setTailorLoading(false)
+  }, [tailorJob, tailorLoading, tailorResume, tailorText])
+
+  const downloadTailored = useCallback(async () => {
+    if (!tailorJob || !tailorResult) return
+    try {
+      const r = await fetch(`${API}/jobs/${tailorJob.id}/tailor/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resume: tailorResume,
+          tailored: tailorResult.tailored,
+        }),
+      })
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.detail || `download failed (${r.status})`)
+      }
+      const blob = await r.blob()
+      const cd = r.headers.get('content-disposition') || ''
+      const m = cd.match(/filename="?([^";]+)"?/)
+      const fname = m ? m[1] : 'Resume_tailored.docx'
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = fname
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+    } catch (e) {
+      console.error('tailored download failed:', e)
+      setTailorError(e.message)
+    }
+  }, [tailorJob, tailorResult, tailorResume])
 
   const barData = useMemo(() => {
     if (stats?.outcome_series?.length) return stats.outcome_series
@@ -420,6 +572,86 @@ export default function App() {
           </section>
         )}
 
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-medium text-slate-600 dark:text-slate-400">
+              Resumes — drag &amp; drop a .docx to add it to the tailoring library
+            </h2>
+            {uploading && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">Parsing…</span>
+            )}
+          </div>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragActive(true)
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragActive(false)
+              uploadResumes(e.dataTransfer.files)
+            }}
+            className={`flex items-center gap-4 rounded-lg border-2 border-dashed p-4 transition ${
+              dragActive
+                ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950'
+                : 'border-slate-300 dark:border-slate-700'
+            }`}
+          >
+            <label className="cursor-pointer rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 dark:bg-slate-200 dark:text-slate-800 dark:hover:bg-slate-300">
+              Choose .docx
+              <input
+                type="file"
+                accept=".docx"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  uploadResumes(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              …or drop files here. Parsed locally into skills/bullets — only the
+              trimmed, contact-free bank is ever sent to the AI when you press Tailor.
+            </p>
+          </div>
+          {uploadNote && (
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400" role="status">
+              {uploadNote}
+            </p>
+          )}
+          {resumes.length > 0 && (
+            <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
+              {resumes.map((r) => (
+                <li key={r.name} className="flex items-center gap-3 py-2">
+                  <input
+                    type="radio"
+                    name="default-resume"
+                    checked={r.name === defaultResume}
+                    onChange={() => chooseDefaultResume(r.name)}
+                    title="Use as default for Tailor"
+                    className="accent-blue-600"
+                  />
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    {r.name}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {r.bank_summary}
+                  </span>
+                  <button
+                    onClick={() => removeResume(r.name)}
+                    title={`Delete ${r.name}`}
+                    className="ml-auto rounded px-2 py-0.5 text-xs text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950"
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         <section className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <select
             value={status}
@@ -560,13 +792,22 @@ export default function App() {
                       </select>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleApply(job)}
-                        disabled={pendingApply === job.id}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
-                      >
-                        {pendingApply === job.id ? 'Opening…' : 'Apply'}
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => openTailor(job)}
+                          title="Tailor your resume to this posting (preview + download, you still apply manually)"
+                          className="rounded-lg border border-violet-300 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950"
+                        >
+                          Tailor
+                        </button>
+                        <button
+                          onClick={() => handleApply(job)}
+                          disabled={pendingApply === job.id}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+                        >
+                          {pendingApply === job.id ? 'Opening…' : 'Apply'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -575,6 +816,161 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {tailorJob && (
+        <div
+          className="fixed inset-0 z-20 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4"
+          onClick={() => !tailorLoading && setTailorJob(null)}
+        >
+          <div
+            className="mt-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Tailor resume</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {tailorJob.title} @ {tailorJob.company}
+                </p>
+              </div>
+              <button
+                onClick={() => !tailorLoading && setTailorJob(null)}
+                className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-sm text-slate-600 dark:text-slate-400">
+                Resume
+                <select
+                  value={tailorResume}
+                  onChange={(e) => setTailorResume(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                >
+                  {resumes.map((r) => (
+                    <option key={r.name} value={r.name}>
+                      {r.name}
+                      {r.name === defaultResume ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="self-end text-xs text-slate-500 dark:text-slate-400">
+                Paste the full posting description below — the tracker stores
+                titles only. Bullets are selected/reworded from your resume,
+                never invented.
+              </p>
+            </div>
+            <textarea
+              value={tailorText}
+              onChange={(e) => setTailorText(e.target.value)}
+              rows={8}
+              placeholder="Paste the full job posting description here…"
+              className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+            />
+            {tailorError && (
+              <p className="mt-2 text-sm text-rose-600 dark:text-rose-400" role="alert">
+                {tailorError}
+              </p>
+            )}
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={runTailor}
+                disabled={tailorLoading}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-violet-500 dark:hover:bg-violet-600"
+              >
+                {tailorLoading ? 'Tailoring…' : 'Run tailoring'}
+              </button>
+              {tailorResult && (
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  via {tailorResult.provider}
+                </span>
+              )}
+            </div>
+
+            {tailorResult && (
+              <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+                <div>
+                  <h3 className="font-medium text-slate-700 dark:text-slate-300">Summary</h3>
+                  <p className="mt-1 text-slate-600 dark:text-slate-400">
+                    {tailorResult.tailored.summary}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950">
+                    <h3 className="font-medium text-emerald-700 dark:text-emerald-300">
+                      Consider adding ({tailorResult.suggested_add.length})
+                    </h3>
+                    <ul className="mt-1 list-disc pl-5 text-emerald-800 dark:text-emerald-200">
+                      {tailorResult.suggested_add.map((s) => (
+                        <li key={s}>{s} — in posting, not on your resume</li>
+                      ))}
+                      {tailorResult.suggested_add.length === 0 && (
+                        <li>No gaps detected.</li>
+                      )}
+                    </ul>
+                  </div>
+                  <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950">
+                    <h3 className="font-medium text-amber-700 dark:text-amber-300">
+                      Consider dropping ({tailorResult.suggested_remove.length})
+                    </h3>
+                    <ul className="mt-1 list-disc pl-5 text-amber-800 dark:text-amber-200">
+                      {tailorResult.suggested_remove.map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                      {tailorResult.suggested_remove.length === 0 && (
+                        <li>Everything overlaps the posting.</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-medium text-slate-700 dark:text-slate-300">
+                    Reordered skills
+                  </h3>
+                  {tailorResult.tailored.skills.map((g) => (
+                    <p key={g.group} className="mt-1 text-slate-600 dark:text-slate-400">
+                      <span className="font-medium">{g.group}: </span>
+                      {g.items.join(', ')}
+                    </p>
+                  ))}
+                </div>
+                <div>
+                  <h3 className="font-medium text-slate-700 dark:text-slate-300">
+                    Selected bullets
+                  </h3>
+                  {tailorResult.tailored.experience.map((j, i) => (
+                    <div key={i} className="mt-2">
+                      <p className="font-medium text-slate-600 dark:text-slate-400">
+                        {j.title} — {j.company}
+                      </p>
+                      <ul className="list-disc pl-5 text-slate-600 dark:text-slate-400">
+                        {j.bullets.map((b, k) => (
+                          <li key={k}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={downloadTailored}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                  >
+                    Download tailored .docx
+                  </button>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    Review it first — then apply manually from the job link.
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

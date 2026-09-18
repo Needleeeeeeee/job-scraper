@@ -61,6 +61,11 @@ _DEFAULTS = {
     "max_ai_calls_per_day": 20,
     "max_ai_tokens_per_day": 100000,
     "usage_state_path": "usage_state.json",
+    # Separate daily budget for on-demand tailoring calls (dashboard
+    # "Tailor" button). Tracked under its own usage entry so tailoring
+    # never eats the scrape filter's budget and vice versa.
+    "tailor_max_calls_per_day": 10,
+    "tailor_max_tokens_per_day": 60000,
 }
 
 
@@ -223,8 +228,14 @@ def apply_heuristic(df, patterns: dict):
 # ---------------------------------------------------------------- AI layer
 
 _PROVIDER_ORDER = (
+    # NOTE (2026-09): Groq decommissioned llama-3.1-8b-instant and
+    # llama-3.3-70b-versatile (Aug 2026). gpt-oss-20b is the current
+    # cheap/fast production default. Override per-provider via
+    # `feedback.ai_model` in config.yaml (applies to whichever provider
+    # is picked) -- check https://console.groq.com/docs/models when a
+    # provider starts 404ing; free-tier model IDs churn often.
     ("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1/chat/completions",
-     "llama-3.1-8b-instant"),
+     "openai/gpt-oss-20b"),
     ("openrouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1/chat/completions",
      "meta-llama/llama-3.1-8b-instruct:free"),
     ("mistral", "MISTRAL_API_KEY", "https://api.mistral.ai/v1/chat/completions",
@@ -260,10 +271,34 @@ def _chat_openai_compatible(url: str, key: str, model: str, system: str, user: s
                            {"role": "user", "content": user}]},
         timeout=30,
     )
+    if resp.status_code == 429:
+        # Free-tier rate limit: honor the server's backoff once instead of
+        # surfacing an instant failure (bounded wait so a user-clicked
+        # button never hangs for minutes).
+        try:
+            wait = float(resp.headers.get("retry-after", "5"))
+        except ValueError:
+            wait = 5.0
+        wait = min(max(wait, 1.0), 30.0)
+        print(f"[feedback] rate-limited (429), waiting {wait:.0f}s then retrying once.")
+        time.sleep(wait)
+        resp = requests.post(
+            url,
+            headers=headers,
+            json={"model": model, "temperature": 0,
+                  "messages": [{"role": "system", "content": system},
+                               {"role": "user", "content": user}]},
+            timeout=30,
+        )
     resp.raise_for_status()
     data = resp.json()
     total = (data.get("usage") or {}).get("total_tokens")
-    return data["choices"][0]["message"]["content"], total
+    msg = (data.get("choices") or [{}])[0].get("message", {}) or {}
+    content = msg.get("content") or ""
+    if isinstance(content, list):  # content-block style responses
+        content = "".join(
+            b.get("text", "") for b in content if isinstance(b, dict))
+    return str(content), total
 
 
 def _chat_gemini(key: str, model: str, system: str, user: str
@@ -477,6 +512,82 @@ def ai_filter(df, decisions: list[dict], fc: dict, keys: dict):
     print(f"[feedback] AI ({name}/{model}) skipped {len(drop_idx)} of {len(batch)} "
           f"new postings based on past REJECTED/SKIP decisions.")
     return kept, len(drop_idx), name
+
+
+def generate_text(system: str, user: str, cfg: dict,
+                  usage_name: str = "tailor") -> tuple[str, str, str]:
+    """One generic LLM call reusing the provider picker, rate limiter and
+    daily budgets. Returns (reply_text, provider_name, error).
+
+    `usage_name` selects the tracked budget bucket: "feedback_ai" shares
+    the scrape filter's caps, anything else (e.g. "tailor") gets the
+    tailor_* caps from the same config block. Never raises -- failures
+    come back as ("", "", reason).
+    """
+    fc = _cfg(cfg)
+    if not fc["use_ai"] or fc["ai_provider"] == "off":
+        return "", "", "AI disabled in config (feedback.use_ai/ai_provider)"
+    try:
+        keys = _api_keys()
+    except Exception:
+        keys = {}
+    provider = _pick_provider(fc, keys)
+    if provider is None:
+        return "", "", "no AI API keys in .env"
+    name, key, url, model = provider
+
+    if usage_name == "feedback_ai":
+        max_calls, max_toks = fc["max_ai_calls_per_day"], fc["max_ai_tokens_per_day"]
+    else:
+        max_calls, max_toks = fc["tailor_max_calls_per_day"], fc["tailor_max_tokens_per_day"]
+    est_in = estimate_tokens(system) + estimate_tokens(user)
+    ok, reason = _budget_allows_fc(fc, usage_name, est_in, max_calls, max_toks)
+    if not ok:
+        return "", "", reason
+    _LIMITER.wait(float(fc["min_seconds_between_calls"] or 0))
+    try:
+        if name == "gemini":
+            reply, used = _chat_gemini(key, model, system, user)
+        else:
+            reply, used = _chat_openai_compatible(url, key, model, system, user)
+    except Exception as e:
+        return "", "", f"{name} request failed: {e}"
+    reply = (reply or "").strip()
+    if not reply:
+        # Reasoning models occasionally return an empty content field on
+        # an otherwise successful call -- report it so callers can retry.
+        _record_usage_name(fc, usage_name, est_in)
+        return "", f"{name}/{model}", "empty reply from model (transient)"
+    spent = used if used else est_in + estimate_tokens(reply)
+    _record_usage_name(fc, usage_name, spent)
+    return reply, f"{name}/{model}", ""
+
+
+def _budget_allows_fc(fc: dict, usage_name: str, est_in_tokens: int,
+                      max_calls: int, max_toks: int) -> tuple[bool, str]:
+    try:
+        entry = _usage_entry(_load_usage(fc["usage_state_path"]), usage_name)
+        if max_calls and entry["calls"] >= max_calls:
+            return False, f"daily AI call budget reached ({entry['calls']}/{max_calls})"
+        if max_toks and entry["tokens"] + est_in_tokens > max_toks:
+            return False, (f"daily AI token budget would be exceeded "
+                           f"({entry['tokens']} used + ~{est_in_tokens} est > {max_toks})")
+        return True, ""
+    except Exception:
+        return True, ""
+
+
+def _record_usage_name(fc: dict, usage_name: str, tokens_used: int):
+    try:
+        usage = _load_usage(fc["usage_state_path"])
+        entry = _usage_entry(usage, usage_name)
+        entry["calls"] += 1
+        entry["tokens"] += max(1, int(tokens_used))
+        _save_usage(fc["usage_state_path"], usage)
+        print(f"[feedback] AI usage today ({usage_name}): "
+              f"{entry['calls']} calls, {entry['tokens']} tokens.")
+    except Exception as e:
+        print(f"[feedback] WARNING: could not record AI usage: {e}")
 
 
 def apply_feedback(df, cfg: dict):
