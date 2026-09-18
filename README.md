@@ -139,7 +139,8 @@ file upload is attempted.
   in a new tab; no browser automation).
 - `GET /stats` — counts by status/source, new-this-week, per-outcome this-week
   counters, plus `applied_series`, `rejected_series`, `skipped_series` and a
-  merged `outcome_series` (`[{week, applied, rejected, skipped}]`) for the graph.
+  merged `outcome_series` (`[{date, applied, rejected, skipped}]`, one point
+  per day) for the graph.
 - `GET /runs/latest` — most recent `scrape_runs` row.
 - Interactive docs at `http://127.0.0.1:8000/docs`.
 

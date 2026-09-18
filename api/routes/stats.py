@@ -10,37 +10,35 @@ router = APIRouter()
 OUTCOME_STATUSES = ("APPLIED", "REJECTED", "SKIP")
 
 
-def _weekly_series(cur, status: str) -> list[dict]:
-    """Weekly counts of dashboard decisions into `status`.
+def _daily_series(cur, status: str) -> list[dict]:
+    """Daily counts of dashboard decisions into `status`.
 
-    Prefers the job_status_history audit trail (exact decision time);
-    falls back to status_updated_at / applied_at on jobs when the
-    history table has no rows yet (e.g. decisions made before this
-    tracking was added).
+    Merges two sources so pre-tracking decisions aren't lost:
+    - `job_status_history` events (exact, for decisions made in the
+      dashboard since tracking was added), plus
+    - one synthetic event per decided job that has NO history rows yet
+      (decisions predating the tracker), dated at `status_updated_at`.
+    Jobs with history rows are excluded from the legacy branch, so
+    nothing is double-counted.
     """
-    cur.execute("SELECT count(*) FROM job_status_history WHERE new_status = %s", (status,))
-    if (cur.fetchone() or [0])[0]:
-        cur.execute(
-            """
-            SELECT date_trunc('week', changed_at) AS week, count(*) AS n
-            FROM job_status_history
-            WHERE new_status = %s
-            GROUP BY week ORDER BY week
-            """,
-            (status,),
-        )
-        return [{"week": week.isoformat(), "count": n} for week, n in cur.fetchall()]
-    ts_col = "applied_at" if status == "APPLIED" else "status_updated_at"
     cur.execute(
-        f"""
-        SELECT date_trunc('week', {ts_col}) AS week, count(*) AS n
-        FROM jobs
-        WHERE status = %s AND {ts_col} IS NOT NULL
-        GROUP BY week ORDER BY week
+        """
+        SELECT day, SUM(n) AS n FROM (
+          SELECT date_trunc('day', changed_at)::date AS day, count(*) AS n
+          FROM job_status_history
+          WHERE new_status = %s
+          GROUP BY 1
+          UNION ALL
+          SELECT date_trunc('day', status_updated_at)::date AS day, count(*) AS n
+          FROM jobs
+          WHERE status = %s
+            AND id NOT IN (SELECT job_id FROM job_status_history)
+          GROUP BY 1
+        ) s GROUP BY day ORDER BY day
         """,
-        (status,),
+        (status, status),
     )
-    return [{"week": week.isoformat(), "count": n} for week, n in cur.fetchall()]
+    return [{"date": day.isoformat(), "count": int(n)} for day, n in cur.fetchall()]
 
 
 @router.get("/stats")
@@ -117,24 +115,25 @@ def stats():
             {"week": week.isoformat(), "count": n} for week, n in cur.fetchall()
         ]
 
-        rejected_series = _weekly_series(cur, "REJECTED")
-        skipped_series = _weekly_series(cur, "SKIP")
+        rejected_series = _daily_series(cur, "REJECTED")
+        skipped_series = _daily_series(cur, "SKIP")
+        applied_daily = _daily_series(cur, "APPLIED")
 
-        # Merged per-week outcome buckets for the stacked/grouped graph.
-        by_week: dict[str, dict] = {}
-        for week_row in applied_series:
-            by_week.setdefault(week_row["week"], {"week": week_row["week"],
+        # Merged per-day outcome buckets for the line graph.
+        by_day: dict[str, dict] = {}
+        for day_row in applied_daily:
+            by_day.setdefault(day_row["date"], {"date": day_row["date"],
                                                   "applied": 0, "rejected": 0, "skipped": 0})
-            by_week[week_row["week"]]["applied"] = week_row["count"]
-        for week_row in rejected_series:
-            by_week.setdefault(week_row["week"], {"week": week_row["week"],
+            by_day[day_row["date"]]["applied"] = day_row["count"]
+        for day_row in rejected_series:
+            by_day.setdefault(day_row["date"], {"date": day_row["date"],
                                                   "applied": 0, "rejected": 0, "skipped": 0})
-            by_week[week_row["week"]]["rejected"] = week_row["count"]
-        for week_row in skipped_series:
-            by_week.setdefault(week_row["week"], {"week": week_row["week"],
+            by_day[day_row["date"]]["rejected"] = day_row["count"]
+        for day_row in skipped_series:
+            by_day.setdefault(day_row["date"], {"date": day_row["date"],
                                                   "applied": 0, "rejected": 0, "skipped": 0})
-            by_week[week_row["week"]]["skipped"] = week_row["count"]
-        outcome_series = [by_week[k] for k in sorted(by_week)]
+            by_day[day_row["date"]]["skipped"] = day_row["count"]
+        outcome_series = [by_day[k] for k in sorted(by_day)]
 
     return {
         "by_status": by_status,

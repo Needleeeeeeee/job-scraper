@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -211,7 +211,7 @@ export default function App() {
     // Back-compat with older /stats that only sent applied_series.
     if (stats?.applied_series?.length)
       return stats.applied_series.map((r) => ({
-        week: r.week,
+        date: String(r.week || '').slice(0, 10),
         applied: r.count || 0,
         rejected: 0,
         skipped: 0,
@@ -321,7 +321,7 @@ export default function App() {
             accent="bg-amber-500"
           />
           <StatCard
-            label={`Decided this week (${barData.length} wk${barData.length === 1 ? '' : 's'})`}
+            label={`Decided this week (${barData.length} day${barData.length === 1 ? '' : 's'})`}
             value={decidedThisWeek}
             accent="bg-violet-600"
           />
@@ -330,14 +330,14 @@ export default function App() {
         {barData.length > 0 && (
           <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
-              Outcomes over time — applied vs rejected vs skipped
+              Outcomes per day — applied vs rejected vs skipped
             </h2>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barData}>
+                <LineChart data={barData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={dark ? '#334155' : '#e2e8f0'} />
                   <XAxis
-                    dataKey="week"
+                    dataKey="date"
                     tickFormatter={(v) => String(v).slice(5, 10)}
                     tick={{ fontSize: 12, fill: dark ? '#94a3b8' : '#64748b' }}
                   />
@@ -352,10 +352,10 @@ export default function App() {
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="applied" name="Applied" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="rejected" name="Rejected" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="skipped" name="Skipped" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                  <Line type="monotone" dataKey="applied" name="Applied" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="rejected" name="Rejected" stroke="#f43f5e" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="skipped" name="Skipped" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </section>
