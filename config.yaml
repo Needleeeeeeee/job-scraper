@@ -44,7 +44,9 @@ search:
   # Middle East/India/Bangladesh-focused -- all skipped for a
   # Metro Manila search. Glassdoor PH coverage is thin and mirrors
   # Indeed; Google Jobs is a global aggregator (expect cross-board
-  # overlap -- deduped by URL, see README).
+  # overlap -- deduped by URL, see README). NOTE: jobspy has no Glassdoor
+  # support for the Philippines at all -- scraper.py skips it automatically
+  # (with a log line) so it can't break the other boards.
   site_names:
     - "indeed"
     - "linkedin"

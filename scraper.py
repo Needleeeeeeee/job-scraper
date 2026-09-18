@@ -90,41 +90,54 @@ def scrape(cfg: dict) -> pd.DataFrame:
             break
         print(f"[scraper] searching: '{term}' in {s['location']}")
 
-        kwargs = dict(
-            site_name=jobspy_sites,
-            search_term=term,
-            location=s["location"],
-            results_wanted=s.get("results_wanted", 50),
-            country_indeed=s.get("country_indeed", "Philippines"),  # required by Indeed/Glassdoor
-            linkedin_fetch_description=s.get("linkedin_fetch_description", True),
-        )
+        for site in jobspy_sites:
+            # Glassdoor has no Philippines coverage in jobspy -- it raises
+            # for country_indeed="Philippines". Skip it up front so one
+            # unsupported board can't poison the other boards' results
+            # (a single combined scrape_jobs call fails wholesale when any
+            # one site raises, nuking Indeed/LinkedIn results too).
+            if site == "glassdoor" and s.get("country_indeed", "").lower() == "philippines":
+                print(f"[scraper] skipping glassdoor for '{term}' "
+                      f"(no Philippines coverage in jobspy)")
+                continue
 
-        # Google Jobs ignores search_term/location and filters only via
-        # google_search_term -- build one per search term so enabling
-        # "google" in site_names actually scopes results.
-        if "google" in jobspy_sites:
-            kwargs["google_search_term"] = (
-                f"{term} jobs in {s['location']}"
+            kwargs = dict(
+                site_name=[site],
+                search_term=term,
+                location=s["location"],
+                results_wanted=s.get("results_wanted", 50),
+                country_indeed=s.get("country_indeed", "Philippines"),  # required by Indeed/Glassdoor
+                linkedin_fetch_description=s.get("linkedin_fetch_description", True),
             )
 
-        # jobspy's Indeed integration rejects combining is_remote with
-        # hours_old in one call (400 error) -- only pass is_remote through
-        # when it's actually True (a remote-only search). For onsite/hybrid
-        # searches (is_remote: false), we skip it entirely and rely on
-        # hours_old + the post-scrape filters instead.
-        if s.get("is_remote", False):
-            kwargs["is_remote"] = True
-        else:
-            kwargs["hours_old"] = s.get("hours_old", 72)
+            # Google Jobs ignores search_term/location and filters only via
+            # google_search_term -- build one per search term so enabling
+            # "google" in site_names actually scopes results.
+            if site == "google":
+                kwargs["google_search_term"] = (
+                    f"{term} jobs in {s['location']}"
+                )
 
-        try:
-            df = scrape_jobs(**kwargs)
-        except Exception as e:
-            print(f"[scraper] WARNING: search for '{term}' failed: {e}")
-            continue
-        if df is not None and not df.empty:
-            df["matched_search_term"] = term
-            all_frames.append(df)
+            # jobspy's Indeed integration rejects combining is_remote with
+            # hours_old in one call (400 error) -- only pass is_remote through
+            # when it's actually True (a remote-only search). For onsite/hybrid
+            # searches (is_remote: false), we skip it entirely and rely on
+            # hours_old + the post-scrape filters instead.
+            if s.get("is_remote", False):
+                kwargs["is_remote"] = True
+            else:
+                kwargs["hours_old"] = s.get("hours_old", 72)
+
+            try:
+                df = scrape_jobs(**kwargs)
+            except Exception as e:
+                print(f"[scraper] WARNING: '{site}' search for '{term}' failed: {e}")
+                continue
+            if df is not None and not df.empty:
+                df["matched_search_term"] = term
+                all_frames.append(df)
+            else:
+                print(f"[scraper] '{site}' returned no results for '{term}'")
 
     if use_jobstreet:
         try:
@@ -136,6 +149,9 @@ def scrape(cfg: dict) -> pd.DataFrame:
             )
         except Exception as e:
             print(f"[scraper] WARNING: jobstreet scrape failed: {e}")
+            if "Executable doesn't exist" in str(e):
+                print("[scraper] HINT: Playwright's browser build is missing -- run "
+                      "'venv/bin/python -m playwright install chromium' to fix.")
             js_df = None
         if js_df is not None and not js_df.empty:
             all_frames.append(js_df)
