@@ -45,8 +45,12 @@ def _source(row) -> str:
             return "indeed"
         if "linkedin" in url:
             return "linkedin"
+        if "glassdoor" in url:
+            return "glassdoor"
+        if "google" in url:
+            return "google"
         return ""
-    for needle in ("indeed", "linkedin", "jobstreet"):
+    for needle in ("indeed", "linkedin", "jobstreet", "glassdoor", "google"):
         if needle in site:
             return needle
     return site

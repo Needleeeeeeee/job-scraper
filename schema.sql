@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS jobs (
   id SERIAL PRIMARY KEY,
-  source TEXT NOT NULL,           -- indeed | linkedin | jobstreet
+  source TEXT NOT NULL,           -- indeed | linkedin | jobstreet | glassdoor | google
   title TEXT NOT NULL,
   company TEXT NOT NULL,
   url TEXT UNIQUE NOT NULL,       -- dedupe key, mirrors current normalized-URL logic

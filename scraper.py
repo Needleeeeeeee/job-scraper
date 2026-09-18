@@ -99,6 +99,14 @@ def scrape(cfg: dict) -> pd.DataFrame:
             linkedin_fetch_description=s.get("linkedin_fetch_description", True),
         )
 
+        # Google Jobs ignores search_term/location and filters only via
+        # google_search_term -- build one per search term so enabling
+        # "google" in site_names actually scopes results.
+        if "google" in jobspy_sites:
+            kwargs["google_search_term"] = (
+                f"{term} jobs in {s['location']}"
+            )
+
         # jobspy's Indeed integration rejects combining is_remote with
         # hours_old in one call (400 error) -- only pass is_remote through
         # when it's actually True (a remote-only search). For onsite/hybrid

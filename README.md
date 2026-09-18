@@ -1,10 +1,11 @@
 # Job Search Scraper + Dashboard
 
-Scrape pipeline + local web dashboard: scrapes Indeed, LinkedIn (via JobSpy)
-and JobStreet (via Playwright/Chromium) for junior/entry-level roles in
-Metro Manila, applies keyword + years-of-experience filters, dedupes, and
-stores new leads in **Postgres**. Additional JobSpy boards (e.g. Glassdoor,
-Google Jobs) can be enabled in `config.yaml`; see [Job boards](#job-boards).
+Scrape pipeline + local web dashboard: scrapes Indeed, LinkedIn, Glassdoor,
+Google Jobs (via JobSpy) and JobStreet (via Playwright/Chromium) for
+junior/entry-level roles in Metro Manila, applies keyword +
+years-of-experience filters, dedupes, and stores new leads in **Postgres**.
+See [Job boards](#job-boards) for coverage notes and how to enable/disable
+boards in `config.yaml`.
 A **FastAPI** backend + **React/Tailwind** dashboard let you review and apply
 to postings from a browser tab.
 
@@ -222,22 +223,22 @@ sites change something.
 
 ## Job boards
 
-Current default (`config.yaml` → `search.site_names`): `indeed`, `linkedin`
-(JobSpy), plus `jobstreet` (custom Playwright scraper in `jobstreet.py`,
-since JobSpy has no JobStreet provider).
+Current default (`config.yaml` → `search.site_names`): `indeed`, `linkedin`,
+`glassdoor`, `google` (JobSpy), plus `jobstreet` (custom Playwright scraper
+in `jobstreet.py`, since JobSpy has no JobStreet provider).
 
-Adding more boards is a one-line config change — `scraper.py` forwards any
-JobSpy site name through to `scrape_jobs`. JobSpy supports `linkedin`,
-`indeed`, `glassdoor`, `google`, `zip_recruiter`, `bayt`, `naukri`, `bdjobs`.
+Adding/removing boards is a one-line config change — `scraper.py` forwards
+any JobSpy site name through to `scrape_jobs` (and builds a per-term
+`google_search_term` when `google` is enabled, since Google Jobs filters
+only via that parameter). JobSpy supports `linkedin`, `indeed`,
+`glassdoor`, `google`, `zip_recruiter`, `bayt`, `naukri`, `bdjobs`.
 
-For a Metro Manila search, worth trying vs. skip:
+Coverage notes for a Metro Manila search:
 
-- Try: `glassdoor` (thin PH coverage, mirrors a lot of Indeed), `google`
-  (global aggregator, sometimes finds PH SMBs Indeed misses — note
-  `scraper.py` doesn't pass `google_search_term` yet, so its filtering is
-  looser).
-- Skip: `zip_recruiter` (US/CA only), `bayt` / `naukri` / `bdjobs`
-  (Middle East / India / Bangladesh focus).
+- `glassdoor`: thin PH coverage, mirrors a lot of Indeed.
+- `google`: global aggregator, sometimes finds PH SMBs Indeed misses.
+- Skipped by default: `zip_recruiter` (US/CA only), `bayt` / `naukri` /
+  `bdjobs` (Middle East / India / Bangladesh focus).
 
 Redundancy: safe but not free. Exact re-scrapes are skipped (normalized
 `job_url` dedupe in-run in `scraper.py`, `UNIQUE(url)` + title/company

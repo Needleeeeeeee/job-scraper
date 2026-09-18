@@ -39,13 +39,18 @@ search:
   # exact spelling; see https://github.com/speedyapply/JobSpy for the list.
   country_indeed: "Philippines"
 
-  # ZipRecruiter and Glassdoor have little/no real coverage outside
-  # US/Canada for a Metro Manila search -- dropped. Indeed has strong PH
-  # coverage; LinkedIn works globally too.
+  # JobSpy boards (indeed/linkedin/glassdoor/google) + custom JobStreet
+  # scraper. ZipRecruiter is US/CA-only; bayt/naukri/bdjobs are
+  # Middle East/India/Bangladesh-focused -- all skipped for a
+  # Metro Manila search. Glassdoor PH coverage is thin and mirrors
+  # Indeed; Google Jobs is a global aggregator (expect cross-board
+  # overlap -- deduped by URL, see README).
   site_names:
     - "indeed"
     - "linkedin"
     - "jobstreet"
+    - "glassdoor"
+    - "google"
 
   # How far back to look
   hours_old: 672
