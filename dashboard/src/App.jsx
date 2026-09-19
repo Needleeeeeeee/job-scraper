@@ -146,29 +146,6 @@ export default function App() {
     []
   )
 
-  const bulkApplyStatus = useCallback(async () => {
-    if (!bulkStatus || selected.length === 0 || bulkBusy) return
-    setBulkBusy(true)
-    try {
-      await Promise.all(
-        selected.map((id) =>
-          fetch(`${API}/jobs/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: bulkStatus }),
-          })
-        )
-      )
-      setSelected([])
-      setBulkStatus('')
-      await fetchAll()
-    } catch (e) {
-      console.error('bulk status update failed:', e)
-      await fetchAll()
-    }
-    setBulkBusy(false)
-  }, [bulkStatus, selected, bulkBusy, fetchAll])
-
   const fetchAll = useCallback(async () => {
     try {
       const [jobsRes, statsRes, runRes, resumesRes] = await Promise.all([
@@ -202,6 +179,29 @@ export default function App() {
     const t = setInterval(fetchAll, 60000)
     return () => clearInterval(t)
   }, [fetchAll])
+
+  const bulkApplyStatus = useCallback(async () => {
+    if (!bulkStatus || selected.length === 0 || bulkBusy) return
+    setBulkBusy(true)
+    try {
+      await Promise.all(
+        selected.map((id) =>
+          fetch(`${API}/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: bulkStatus }),
+          })
+        )
+      )
+      setSelected([])
+      setBulkStatus('')
+      await fetchAll()
+    } catch (e) {
+      console.error('bulk status update failed:', e)
+      await fetchAll()
+    }
+    setBulkBusy(false)
+  }, [bulkStatus, selected, bulkBusy, fetchAll])
 
   const parsedSearch = useMemo(() => {
     const raw = (search || '').trim()
