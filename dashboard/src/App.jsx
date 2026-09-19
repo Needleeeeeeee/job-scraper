@@ -16,10 +16,10 @@ const STATUSES = ['NEW', 'REVIEWED', 'APPLIED', 'SKIP', 'REJECTED', 'MISMATCH', 
 const SOURCES = ['indeed', 'linkedin', 'jobstreet', 'glassdoor', 'google']
 
 const STATUS_STYLES = {
-  NEW: 'bg-blue-100 text-blue-700 ring-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:ring-blue-800',
+  NEW: 'bg-neutral-800 text-white ring-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:ring-neutral-100',
   REVIEWED: 'bg-amber-100 text-amber-700 ring-amber-200 dark:bg-amber-900 dark:text-amber-300 dark:ring-amber-800',
   APPLIED: 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-900 dark:text-emerald-300 dark:ring-emerald-800',
-  SKIP: 'bg-slate-200 text-slate-600 ring-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:ring-slate-600',
+  SKIP: 'bg-neutral-200 text-neutral-600 ring-neutral-300 dark:bg-neutral-700 dark:text-neutral-300 dark:ring-neutral-600',
   REJECTED: 'bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-900 dark:text-rose-300 dark:ring-rose-800',
   MISMATCH: 'bg-orange-100 text-orange-700 ring-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:ring-orange-800',
   EXP_GAP: 'bg-violet-100 text-violet-700 ring-violet-200 dark:bg-violet-900 dark:text-violet-300 dark:ring-violet-800',
@@ -27,7 +27,7 @@ const STATUS_STYLES = {
 
 // Negative-status hide pills: active (hiding) color per status.
 const HIDE_ACTIVE_STYLES = {
-  SKIP: 'bg-slate-500 text-white ring-slate-500',
+  SKIP: 'bg-neutral-500 text-white ring-neutral-500',
   REJECTED: 'bg-rose-600 text-white ring-rose-600 dark:bg-rose-500 dark:ring-rose-500',
   MISMATCH: 'bg-orange-500 text-white ring-orange-500 dark:bg-orange-500 dark:ring-orange-500',
   EXP_GAP: 'bg-violet-500 text-white ring-violet-500 dark:bg-violet-500 dark:ring-violet-500',
@@ -508,12 +508,12 @@ export default function App() {
   }, [stats, barData])
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900">
+    <div className="min-h-screen bg-neutral-50 text-neutral-800 dark:bg-neutral-950 dark:text-neutral-200">
+      <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white px-6 py-4 dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">Job Scraper Dashboard</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               Junior/entry-level roles · Metro Manila
             </p>
           </div>
@@ -521,19 +521,19 @@ export default function App() {
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-medium ring-1 ${
                 lastRun
-                  ? 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700'
-                  : 'bg-slate-100 text-slate-400 ring-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700'
+                  ? 'bg-neutral-100 text-neutral-600 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700'
+                  : 'bg-neutral-100 text-neutral-400 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-500 dark:ring-neutral-700'
               }`}
             >
               <span
                 className={`h-2 w-2 rounded-full ${
-                  lastRun ? 'bg-emerald-500' : 'bg-slate-400'
+                  lastRun ? 'bg-emerald-500' : 'bg-neutral-400'
                 }`}
               />
               Last scraped: {lastRun ? timeAgo(lastRun.finished_at) : '—'}
             </span>
             {lastRun?.new_jobs_count >= 0 && (
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-neutral-500 dark:text-neutral-400">
                 ({lastRun.new_jobs_count} new last run)
               </span>
             )}
@@ -541,13 +541,13 @@ export default function App() {
               onClick={handleScrape}
               disabled={scraping}
               title="Scrape new jobs now (same as running main.py)"
-              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+              className="rounded-lg bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
             >
               {scraping ? 'Scraping…' : 'Scrape new jobs'}
             </button>
             <button
               onClick={() => setDark((d) => !d)}
-              className="rounded-lg border border-slate-300 bg-slate-100 p-2 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+              className="rounded-lg border border-neutral-300 bg-neutral-100 p-2 hover:bg-neutral-200 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:bg-neutral-700"
               title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {dark ? (
@@ -571,7 +571,7 @@ export default function App() {
           </div>
         </div>
         {scrapeNote && (
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400" role="status">
+          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400" role="status">
             {scrapeNote}
           </p>
         )}
@@ -582,12 +582,12 @@ export default function App() {
           <StatCard
             label="Total tracked"
             value={jobs.length}
-            accent="bg-slate-800 dark:bg-slate-200"
+            accent="bg-neutral-800 dark:bg-neutral-200"
           />
           <StatCard
             label="NEW this week"
             value={stats?.new_this_week ?? 0}
-            accent="bg-blue-600"
+            accent="bg-neutral-800"
           />
           <StatCard
             label="Applied (all time)"
@@ -622,8 +622,8 @@ export default function App() {
         </section>
 
         {barData.length > 0 && (
-          <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <h2 className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+          <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+            <h2 className="mb-2 text-sm font-medium text-neutral-600 dark:text-neutral-400">
               Outcomes per day — applied vs rejected vs skipped vs mismatch vs exp. gap
             </h2>
             <div className="h-40">
@@ -657,13 +657,13 @@ export default function App() {
           </section>
         )}
 
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-slate-600 dark:text-slate-400">
+            <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
               Resumes — drag &amp; drop a .docx to add it to the tailoring library
             </h2>
             {uploading && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">Parsing…</span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">Parsing…</span>
             )}
           </div>
           <div
@@ -679,11 +679,11 @@ export default function App() {
             }}
             className={`flex items-center gap-4 rounded-lg border-2 border-dashed p-4 transition ${
               dragActive
-                ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950'
-                : 'border-slate-300 dark:border-slate-700'
+                ? 'border-neutral-500 bg-neutral-100 dark:border-neutral-400 dark:bg-neutral-900'
+                : 'border-neutral-300 dark:border-neutral-700'
             }`}
           >
-            <label className="cursor-pointer rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 dark:bg-slate-200 dark:text-slate-800 dark:hover:bg-slate-300">
+            <label className="cursor-pointer rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-neutral-200 dark:text-neutral-800 dark:hover:bg-neutral-300">
               Choose .docx
               <input
                 type="file"
@@ -696,18 +696,18 @@ export default function App() {
                 }}
               />
             </label>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
               …or drop files here. Parsed locally into skills/bullets — only the
               trimmed, contact-free bank is ever sent to the AI when you press Tailor.
             </p>
           </div>
           {uploadNote && (
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400" role="status">
+            <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400" role="status">
               {uploadNote}
             </p>
           )}
           {resumes.length > 0 && (
-            <ul className="mt-3 divide-y divide-slate-100 text-sm dark:divide-slate-800">
+            <ul className="mt-3 divide-y divide-neutral-100 text-sm dark:divide-neutral-800">
               {resumes.map((r) => (
                 <li key={r.name} className="flex items-center gap-3 py-2">
                   <input
@@ -716,12 +716,12 @@ export default function App() {
                     checked={r.name === defaultResume}
                     onChange={() => chooseDefaultResume(r.name)}
                     title="Use as default for Tailor"
-                    className="accent-blue-600"
+                    className="accent-neutral-800"
                   />
-                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                  <span className="font-medium text-neutral-700 dark:text-neutral-300">
                     {r.name}
                   </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
                     {r.bank_summary}
                   </span>
                   <button
@@ -737,11 +737,11 @@ export default function App() {
           )}
         </section>
 
-        <section className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <section className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
           >
             <option value="">All statuses</option>
             {STATUSES.map((s) => (
@@ -760,7 +760,7 @@ export default function App() {
                 className={`rounded-full px-3 py-1.5 text-xs font-medium ring-1 transition ${
                   isHidden
                     ? HIDE_ACTIVE_STYLES[s]
-                    : 'bg-white text-slate-500 ring-slate-300 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-700'
+                    : 'bg-white text-neutral-500 ring-neutral-300 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-400 dark:ring-neutral-700 dark:hover:bg-neutral-700'
                 }`}
               >
                 {isHidden ? '✕' : '◌'} {s} ({hiddenCounts[s] || 0})
@@ -770,7 +770,7 @@ export default function App() {
           <select
             value={source}
             onChange={(e) => setSource(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
           >
             <option value="">All sources</option>
             {SOURCES.map((s) => (
@@ -779,22 +779,22 @@ export default function App() {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
+          <label className="flex items-center gap-1.5 text-sm text-neutral-600 dark:text-neutral-400">
             From
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className="rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
+          <label className="flex items-center gap-1.5 text-sm text-neutral-600 dark:text-neutral-400">
             To
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className="rounded-lg border border-neutral-300 bg-white px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
             />
           </label>
           <input
@@ -802,22 +802,22 @@ export default function App() {
             placeholder="Search title or company… (title:foo = titles only)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="min-w-52 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+            className="min-w-52 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
           />
-          <span className="text-sm text-slate-500 dark:text-slate-400">
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">
             {filtered.length} of {jobs.length}
           </span>
         </section>
 
         {selected.length > 0 && (
-          <section className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+          <section className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-neutral-300 bg-neutral-100 p-4 dark:border-neutral-700 dark:bg-neutral-900">
+            <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
               {selected.length} selected
             </span>
             <select
               value={bulkStatus}
               onChange={(e) => setBulkStatus(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
             >
               <option value="">Set status…</option>
               {STATUSES.map((s) => (
@@ -829,7 +829,7 @@ export default function App() {
             <button
               onClick={bulkApplyStatus}
               disabled={!bulkStatus || bulkBusy}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
             >
               {bulkBusy ? 'Applying…' : 'Apply to selected'}
             </button>
@@ -838,25 +838,25 @@ export default function App() {
                 setSelected([])
                 setBulkStatus('')
               }}
-              className="rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800"
+              className="rounded-lg px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
             >
               Clear
             </button>
           </section>
         )}
 
-        <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <section className="mt-6 overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
           {loading ? (
-            <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            <div className="p-8 text-center text-sm text-neutral-500 dark:text-neutral-400">
               Loading jobs…
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            <div className="p-8 text-center text-sm text-neutral-500 dark:text-neutral-400">
               No jobs match your filters.
             </div>
           ) : (
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
+              <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800 dark:bg-neutral-800 dark:text-neutral-400">
                 <tr>
                   <th className="w-10 px-4 py-3 font-medium">
                     <input
@@ -864,7 +864,7 @@ export default function App() {
                       checked={filtered.length > 0 && filtered.every((job) => selected.includes(job.id))}
                       onChange={() => toggleSelectAll(filtered)}
                       title={selected.length ? 'Deselect these rows' : 'Select these rows'}
-                      className="accent-blue-600"
+                      className="accent-neutral-800"
                     />
                   </th>
                   <th className="px-4 py-3 font-medium">Title</th>
@@ -875,16 +875,16 @@ export default function App() {
                   <th className="px-4 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {filtered.map((job) => (
-                  <tr key={job.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <tr key={job.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selected.includes(job.id)}
                         onChange={() => toggleSelect(job.id)}
                         title={`Select "${job.title || 'Untitled'}"`}
-                        className="accent-blue-600"
+                        className="accent-neutral-800"
                       />
                     </td>
                     <td className="px-4 py-3">
@@ -892,24 +892,24 @@ export default function App() {
                         href={job.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-medium text-slate-800 hover:text-blue-600 hover:underline dark:text-slate-200 dark:hover:text-blue-400"
+                        className="font-medium text-neutral-800 hover:text-black hover:underline dark:text-neutral-200 dark:hover:text-white"
                       >
                         <Highlight text={job.title || 'Untitled'} query={parsedSearch.q} />
                       </a>
                     </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                    <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                       <Highlight text={job.company || '—'} query={parsedSearch.q} />
                     </td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-block rounded px-2 py-0.5 text-xs font-medium capitalize ${
-                          SOURCE_STYLES[job.source] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                          SOURCE_STYLES[job.source] || 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'
                         }`}
                       >
                         {job.source || '—'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                    <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                       {fmtDate(job.date_posted)}
                     </td>
                     <td className="px-4 py-3">
@@ -917,7 +917,7 @@ export default function App() {
                         value={job.status}
                         onChange={(e) => changeStatus(job, e.target.value)}
                         className={`rounded-full border-0 px-3 py-1 text-xs font-medium ring-1 text-center ${
-                          STATUS_STYLES[job.status] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                          STATUS_STYLES[job.status] || 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300'
                         }`}
                         title="Update status"
                       >
@@ -940,7 +940,7 @@ export default function App() {
                         <button
                           onClick={() => handleApply(job)}
                           disabled={pendingApply === job.id}
-                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+                          className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
                         >
                           {pendingApply === job.id ? 'Opening…' : 'Apply'}
                         </button>
@@ -956,23 +956,23 @@ export default function App() {
 
       {tailorJob && (
         <div
-          className="fixed inset-0 z-20 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4"
+          className="fixed inset-0 z-20 flex items-start justify-center overflow-y-auto bg-neutral-900/50 p-4"
           onClick={() => !tailorLoading && setTailorJob(null)}
         >
           <div
-            className="mt-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+            className="mt-8 w-full max-w-3xl rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-700 dark:bg-neutral-900"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">Tailor resume</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
                   {tailorJob.title} @ {tailorJob.company}
                 </p>
               </div>
               <button
                 onClick={() => !tailorLoading && setTailorJob(null)}
-                className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                className="rounded-lg px-2 py-1 text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
                 title="Close"
               >
                 ✕
@@ -980,12 +980,12 @@ export default function App() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-sm text-slate-600 dark:text-slate-400">
+              <label className="text-sm text-neutral-600 dark:text-neutral-400">
                 Resume
                 <select
                   value={tailorResume}
                   onChange={(e) => setTailorResume(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+                  className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
                 >
                   {resumes.map((r) => (
                     <option key={r.name} value={r.name}>
@@ -995,7 +995,7 @@ export default function App() {
                   ))}
                 </select>
               </label>
-              <p className="self-end text-xs text-slate-500 dark:text-slate-400">
+              <p className="self-end text-xs text-neutral-500 dark:text-neutral-400">
                 Paste the full posting description below — the tracker stores
                 titles only. Bullets are selected/reworded from your resume,
                 never invented.
@@ -1006,7 +1006,7 @@ export default function App() {
               onChange={(e) => setTailorText(e.target.value)}
               rows={8}
               placeholder="Paste the full job posting description here…"
-              className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800"
+              className="mt-3 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
             />
             {tailorError && (
               <p className="mt-2 text-sm text-rose-600 dark:text-rose-400" role="alert">
@@ -1022,17 +1022,17 @@ export default function App() {
                 {tailorLoading ? 'Tailoring…' : 'Run tailoring'}
               </button>
               {tailorResult && (
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
                   via {tailorResult.provider}
                 </span>
               )}
             </div>
 
             {tailorResult && (
-              <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+              <div className="mt-4 space-y-4 border-t border-neutral-200 pt-4 text-sm dark:border-neutral-700">
                 <div>
-                  <h3 className="font-medium text-slate-700 dark:text-slate-300">Summary</h3>
-                  <p className="mt-1 text-slate-600 dark:text-slate-400">
+                  <h3 className="font-medium text-neutral-700 dark:text-neutral-300">Summary</h3>
+                  <p className="mt-1 text-neutral-600 dark:text-neutral-400">
                     {tailorResult.tailored.summary}
                   </p>
                 </div>
@@ -1065,31 +1065,31 @@ export default function App() {
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-medium text-slate-700 dark:text-slate-300">
+                  <h3 className="font-medium text-neutral-700 dark:text-neutral-300">
                     Reordered skills
                   </h3>
                   {tailorResult.tailored.skills.map((g) => (
-                    <p key={g.group} className="mt-1 text-slate-600 dark:text-slate-400">
+                    <p key={g.group} className="mt-1 text-neutral-600 dark:text-neutral-400">
                       <span className="font-medium">{g.group}: </span>
                       {g.items.join(', ')}
                     </p>
                   ))}
                 </div>
                 <div>
-                  <h3 className="font-medium text-slate-700 dark:text-slate-300">
+                  <h3 className="font-medium text-neutral-700 dark:text-neutral-300">
                     Selected bullets
                   </h3>
                   {tailorResult.tailored.experience.map((j, i) => (
                     <div key={i} className="mt-2">
-                      <p className="font-medium text-slate-600 dark:text-slate-400">
+                      <p className="font-medium text-neutral-600 dark:text-neutral-400">
                         {j.title} — {j.company}
                         {(j.location || j.start_date) && (
-                          <span className="font-normal text-slate-500 dark:text-slate-500">
+                          <span className="font-normal text-neutral-500 dark:text-neutral-500">
                             {' '}({[j.location, [j.start_date, j.end_date].filter(Boolean).join(' – ')].filter(Boolean).join(' | ')})
                           </span>
                         )}
                       </p>
-                      <ul className="list-disc pl-5 text-slate-600 dark:text-slate-400">
+                      <ul className="list-disc pl-5 text-neutral-600 dark:text-neutral-400">
                         {j.bullets.map((b, k) => (
                           <li key={k}>{b}</li>
                         ))}
@@ -1100,11 +1100,11 @@ export default function App() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={downloadTailored}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                    className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
                   >
                     Download tailored .docx
                   </button>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
                     Review it first — then apply manually from the job link.
                   </span>
                 </div>
@@ -1119,12 +1119,12 @@ export default function App() {
 
 function StatCard({ label, value, accent }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-center gap-2">
         <span className={`h-2.5 w-2.5 rounded-full ${accent}`} />
-        <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">{label}</p>
       </div>
-      <p className="mt-1 text-3xl font-semibold text-slate-800 dark:text-slate-100">{value}</p>
+      <p className="mt-1 text-3xl font-semibold text-neutral-800 dark:text-neutral-100">{value}</p>
     </div>
   )
 }
