@@ -142,9 +142,12 @@ feedback learner (see below).
 - **Bulk editing:** tick the checkboxes (header box selects all filtered
   rows) and a bulk bar appears — pick a status once, apply it to the whole
   batch. Useful for triaging a fresh scrape.
-- **Search** filters live as you type. A plain query matches **title or
-  company**; prefix it with `title:` to restrict the match to job titles
-  only (e.g. `title:python`). Matching text is highlighted in the table.
+- **Search** filters live as you type (title/company substring,
+  case-insensitive) with a mini syntax: `"exact phrase"` keeps words
+  together, `a, b` / `a | b` / `a OR b` match ANY alternative,
+  space-separated words must ALL match, and `title:` / `company:`
+  restrict the whole query (e.g. `title:python backend, jr | junior`).
+  First matching term is highlighted in the table.
 - **Negative filter-out tags:** the `✕ SKIP (n)` / `✕ REJECTED (n)` /
   `✕ MISMATCH (n)` / `✕ EXP_GAP (n)` / `✕ EXPIRED (n)` pills
   next to the status dropdown hide those postings from the table (counts

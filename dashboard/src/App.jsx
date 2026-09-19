@@ -59,19 +59,102 @@ function timeAgo(iso) {
 }
 
 function Highlight({ text, query }) {
-  const q = (query || '').trim().toLowerCase()
+  const terms = (Array.isArray(query) ? query : [query])
+    .map((q) => (q || '').trim().toLowerCase())
+    .filter(Boolean)
   const s = String(text || '')
-  if (!q || !s) return s
-  const i = s.toLowerCase().indexOf(q)
-  if (i === -1) return s
+  if (!terms.length || !s) return s
+  const low = s.toLowerCase()
+  let best = -1
+  let bestLen = 0
+  for (const t of terms) {
+    const i = low.indexOf(t)
+    if (i !== -1 && (best === -1 || i < best)) {
+      best = i
+      bestLen = t.length
+    }
+  }
+  if (best === -1) return s
   return (
     <>
-      {s.slice(0, i)}
+      {s.slice(0, best)}
       <mark className="rounded bg-amber-200 px-0.5 text-inherit dark:bg-amber-700 dark:text-amber-100">
-        {s.slice(i, i + q.length)}
+        {s.slice(best, best + bestLen)}
       </mark>
-      {s.slice(i + q.length)}
+      {s.slice(best + bestLen)}
     </>
+  )
+}
+
+// Mini search syntax (all case-insensitive substring matches):
+//   "exact phrase"   quoted phrases stay together
+//   a, b | c | d OR e  comma / pipe / OR separate alternatives (match ANY)
+//   python backend   bare words in one alternative must ALL match (AND)
+//   title:foo / company:foo   restrict the whole query to titles / companies
+function splitBranches(input) {
+  const branches = []
+  let cur = ''
+  let inQuotes = false
+  const push = () => {
+    if (cur.trim()) branches.push(cur.trim())
+    cur = ''
+  }
+  for (const ch of input) {
+    if (ch === '"') {
+      inQuotes = !inQuotes
+      cur += ch
+      continue
+    }
+    if (!inQuotes && (ch === '|' || ch === ',')) {
+      push()
+      continue
+    }
+    cur += ch
+  }
+  push()
+  return branches
+}
+
+function parseSearchQuery(raw) {
+  let s = (raw || '').trim()
+  let scope = 'both'
+  const scopeMatch = s.match(/^(title|company):/i)
+  if (scopeMatch) {
+    scope = scopeMatch[1].toLowerCase()
+    s = s.slice(scopeMatch[0].length).trim()
+  }
+  const alternatives = []
+  for (const branch of splitBranches(s)) {
+    const toks = []
+    const re = /"([^"]*)"|(\S+)/g
+    let t
+    while ((t = re.exec(branch))) {
+      toks.push((t[1] !== undefined ? t[1] : t[2]).toLowerCase())
+    }
+    let cur = []
+    const flush = () => {
+      const terms = cur.filter((x) => x)
+      if (terms.length) alternatives.push(terms)
+      cur = []
+    }
+    for (const tok of toks) {
+      if (tok === 'or') flush()
+      else cur.push(tok)
+    }
+    flush()
+  }
+  const terms = [...new Set(alternatives.flat())].sort((a, b) => b.length - a.length)
+  return { scope, alternatives, terms }
+}
+
+function matchesSearch(job, parsed) {
+  if (!parsed.alternatives.length) return true
+  const title = String(job.title || '').toLowerCase()
+  const company = String(job.company || '').toLowerCase()
+  const haystacks =
+    parsed.scope === 'title' ? [title] : parsed.scope === 'company' ? [company] : [title, company]
+  return parsed.alternatives.some((alt) =>
+    alt.every((term) => haystacks.some((h) => h.includes(term)))
   )
 }
 
@@ -205,14 +288,9 @@ export default function App() {
     setBulkBusy(false)
   }, [bulkStatus, selected, bulkBusy, fetchAll])
 
-  const parsedSearch = useMemo(() => {
-    const raw = (search || '').trim()
-    const titleOnly = /^title:/i.test(raw)
-    return { titleOnly, q: raw.replace(/^title:/i, '').trim().toLowerCase() }
-  }, [search])
+  const parsedSearch = useMemo(() => parseSearchQuery(search), [search])
 
   const filtered = useMemo(() => {
-    const { titleOnly, q } = parsedSearch
     return jobs.filter((job) => {
       if (status && job.status !== status) return false
       // Negative filter-out tags: hidden statuses apply only when no
@@ -221,11 +299,7 @@ export default function App() {
       if (source && job.source !== source) return false
       if (dateFrom && String(job.date_posted || '').slice(0, 10) < dateFrom) return false
       if (dateTo && String(job.date_posted || '').slice(0, 10) > dateTo) return false
-      if (q) {
-        const inTitle = String(job.title || '').toLowerCase().includes(q)
-        const inCompany = String(job.company || '').toLowerCase().includes(q)
-        if (titleOnly ? !inTitle : !inTitle && !inCompany) return false
-      }
+      if (!matchesSearch(job, parsedSearch)) return false
       return true
     })
   }, [jobs, status, hidden, source, dateFrom, dateTo, parsedSearch])
@@ -806,7 +880,7 @@ export default function App() {
           </label>
           <input
             type="search"
-            placeholder="Search title or company… (title:foo = titles only)"
+            placeholder='title/company: python backend, jr | junior, "exact phrase"'
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="min-w-52 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-800"
@@ -901,11 +975,11 @@ export default function App() {
                         rel="noreferrer"
                         className="font-medium text-neutral-800 hover:text-black hover:underline dark:text-neutral-200 dark:hover:text-white"
                       >
-                        <Highlight text={job.title || 'Untitled'} query={parsedSearch.q} />
+                        <Highlight text={job.title || 'Untitled'} query={parsedSearch.terms} />
                       </a>
                     </td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
-                      <Highlight text={job.company || '—'} query={parsedSearch.q} />
+                      <Highlight text={job.company || '—'} query={parsedSearch.terms} />
                     </td>
                     <td className="px-4 py-3">
                       <span
