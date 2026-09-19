@@ -14,6 +14,12 @@ to postings from a browser tab.
 - The dashboard lists postings, filters by status/source/date/text, and has an
   **Apply** button per row that opens the posting as a new tab in your
   existing browser.
+- Checkbox column + bulk bar for setting one status on many rows at once.
+- The scraper learns from your decisions (`REJECTED` / `SKIP` / `MISMATCH` /
+  `EXP_GAP` vs `APPLIED` / `REVIEWED`) and drops lookalikes next run.
+- A **Resumes** library (drag-drop `.docx`) plus a per-row **Tailor** button:
+  previews a posting-tailored resume (skill add/drop suggestions included)
+  as downloadable `.docx` — you still apply manually.
 - `applications.xlsx` support is kept behind `--legacy-xlsx` until you've
   confirmed the Postgres path on a few real runs.
 
@@ -29,6 +35,8 @@ run_and_open.sh                   scrape, ensure both servers, open the dashboar
 stop.sh                           stop the API/dashboard + any leftover browser processes
 apply_helper.py                   opens a job URL in a real browser and prefills form fields
 notifier.py                       tails runs.log -> desktop notification (unchanged)
+extract_resume.py                 Harvard-style .docx parser -> structured resume bank YAML
+resumes.py / tailor.py / render_resume.py   resume library, per-posting LLM tailoring, .docx rendering
 ```
 
 The API and dashboard run as **systemd user units**
@@ -114,7 +122,10 @@ tails `runs.log`.
 Open the dashboard and check the **NEW** rows. Use the **Scrape new jobs**
 button in the header whenever you want fresh postings — no need to rerun
 `main.py` or `run_and_open.sh` from a terminal; duplicates are skipped, so
-re-scraping is always safe.
+re-scraping is always safe. After a scrape the header note breaks down the
+auto-filter, e.g. `+12 new (300 checked, 24 auto-filtered
+(location:cebu×8, title-keyword:senior×5))` — the top drop reasons from the
+feedback learner (see below).
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
   `REJECTED` / `MISMATCH` / `EXP_GAP` directly (`MISMATCH` = wrong role or
@@ -127,6 +138,9 @@ re-scraping is always safe.
   a tab reload). Flip it to `APPLIED` manually after you've finished the
   application (apply_helper never files anything for you — some ATS
   platforms detect automation).
+- **Bulk editing:** tick the checkboxes (header box selects all filtered
+  rows) and a bulk bar appears — pick a status once, apply it to the whole
+  batch. Useful for triaging a fresh scrape.
 - **Search** filters live as you type. A plain query matches **title or
   company**; prefix it with `title:` to restrict the match to job titles
   only (e.g. `title:python`). Matching text is highlighted in the table.
@@ -165,8 +179,17 @@ file upload is attempted.
   `venv/bin/python main.py`); `409` if one is already running. Optional body
   `{"legacy_xlsx": true}` mirrors to `applications.xlsx`.
 - `GET /scrape/status` — `idle | running | done | error` plus `added` /
-  `scraped` counts and the run `summary`; the dashboard polls this while the
+  `scraped` counts, the run `summary`, and the feedback breakdown
+  (`filtered`, `filter_reasons`); the dashboard polls this while the
   **Scrape new jobs** button shows `Scraping…`.
+- `GET /resumes` — uploaded resume library + default; `POST
+  /resumes/upload` (multipart `.docx`, parsed server-side);
+  `POST /resumes/default`; `DELETE /resumes/{name}`.
+- `POST /jobs/{id}/tailor` — `{"resume"?, "job_text"}` runs the LLM
+  tailoring + heuristic skill-gap and returns preview JSON (one AI call,
+  separate `tailor` daily budget; nothing saved).
+- `POST /jobs/{id}/tailor/download` — `{"resume"?, "tailored"}` renders
+  the approved preview to `.docx` for download.
 - Interactive docs at `http://127.0.0.1:8000/docs`.
 
 ## Feedback learner (scraper learns from your decisions)
@@ -200,6 +223,35 @@ next scrape what to drop, via `feedback.py` (see `config.yaml` → `feedback:`):
   `max_ai_calls_per_day` / `max_ai_tokens_per_day` budgets tracked in
   `usage_state.json` (gitignored, resets daily). Over budget → the scrape
   continues heuristic-only with a log line.
+- **Model IDs churn:** the Groq default is `openai/gpt-oss-20b` (both old
+  `llama-*` defaults were decommissioned Aug 2026 — every AI call 404ed
+  until the switch). If a provider starts 404ing, check its model catalog
+  and override via `feedback.ai_model` in `config.yaml`.
+
+## Resume tailoring (per-posting, on demand)
+
+The dashboard's **Resumes** panel accepts drag-dropped `.docx` files
+(stored gitignored under `resumes/` with an extracted bank sidecar each;
+radio button picks the default). Every job row has a **Tailor** button:
+
+1. Paste the posting description (the tracker stores titles only, so one
+   paste from the listing is needed — prefilled with title/company).
+2. **Run tailoring** — one LLM call (separate `tailor_*` daily budget in
+   `config.yaml` → `feedback:`) selects/reorders/lightly rewords bullets
+   from *your* bank. Contact details are stripped from the payload; facts
+   (companies, titles, dates, schools) must be echoed exactly, never
+   invented. A heuristic skill-gap runs alongside (no LLM): posting skills
+   missing from your bank ("consider adding") vs bank items with zero
+   posting overlap ("consider dropping").
+3. Review the preview (summary, add/drop lists, reordered skills, bullets
+   with dates), then **Download tailored .docx** and apply manually from
+   the job link. Nothing auto-applies, ever.
+
+Re-import a resume anytime with `venv/bin/python extract_resume.py
+resume.docx` — the parser understands Harvard-style layouts (centered
+section headings, bold-lead company/title/school lines, tab-spaced dates,
+labeled skill groups) and keeps anything unrecognized under
+`extra_sections` instead of dropping it.
 
 This is a local single-user tool: no auth, no cloud deployment. CORS is
 limited to localhost origins.
@@ -234,16 +286,20 @@ Current default (`config.yaml` → `search.site_names`): `indeed`, `linkedin`,
 `glassdoor`, `google` (JobSpy), plus `jobstreet` (custom Playwright scraper
 in `jobstreet.py`, since JobSpy has no JobStreet provider).
 
-Adding/removing boards is a one-line config change — `scraper.py` forwards
-any JobSpy site name through to `scrape_jobs` (and builds a per-term
+Adding/removing boards is a one-line config change. `scraper.py` runs one
+JobSpy call **per site per term**, so a single failing board can't poison
+the others (this used to be one combined call — Glassdoor's Philippines
+error nuked Indeed/LinkedIn results for every term). It builds a per-term
 `google_search_term` when `google` is enabled, since Google Jobs filters
-only via that parameter). JobSpy supports `linkedin`, `indeed`,
+only via that parameter. JobSpy supports `linkedin`, `indeed`,
 `glassdoor`, `google`, `zip_recruiter`, `bayt`, `naukri`, `bdjobs`.
 
 Coverage notes for a Metro Manila search:
 
-- `glassdoor`: thin PH coverage, mirrors a lot of Indeed.
-- `google`: global aggregator, sometimes finds PH SMBs Indeed misses.
+- `glassdoor`: **no JobSpy support for the Philippines at all** — skipped
+  automatically with a log line (keeping it in `site_names` is harmless).
+- `google`: global aggregator, sometimes finds PH SMBs Indeed misses, but
+  often returns zero rows when JobSpy's Google parser breaks.
 - Skipped by default: `zip_recruiter` (US/CA only), `bayt` / `naukri` /
   `bdjobs` (Middle East / India / Bangladesh focus).
 
@@ -278,8 +334,10 @@ style of `jobstreet.py` (e.g. Kalibrr, Bossjob).
 - `applications.xlsx` is still written when you pass `--legacy-xlsx`; the
   Postgres `jobs` table is the new source of truth and the dashboard reads
   only Postgres.
-- Indoor-only scoring/tailoring (the old resume-tailoring pipeline) was
-  archived under `.archive-tailoring/` — nothing imports it anymore.
+- On-demand per-posting tailoring lives in `tailor.py` + `resumes.py` +
+  `render_resume.py` (see [Resume tailoring](#resume-tailoring)). The old
+  batch pipeline under `.archive-tailoring/` stays archived — nothing
+  imports it.
 - Greenhouse/Lever/company-board direct scraping isn't wired up yet
   (`config.yaml`'s `company_boards` section is a placeholder) — those
   boards expose stabler JSON endpoints than LinkedIn/Indeed scraping if you
