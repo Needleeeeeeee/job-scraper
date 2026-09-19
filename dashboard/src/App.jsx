@@ -106,6 +106,9 @@ export default function App() {
   const [dateTo, setDateTo] = useState('')
   const [search, setSearch] = useState('')
   const [hidden, setHidden] = useState([])
+  const [selected, setSelected] = useState([])
+  const [bulkStatus, setBulkStatus] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
   const [pendingApply, setPendingApply] = useState(null)
   const [scraping, setScraping] = useState(false)
   const [scrapeNote, setScrapeNote] = useState('')
@@ -127,6 +130,45 @@ export default function App() {
     setHidden((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
   }, [])
 
+  const toggleSelect = useCallback((id) => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }, [])
+
+  const toggleSelectAll = useCallback(
+    (rows) => {
+      const ids = rows.map((job) => job.id)
+      setSelected((prev) => {
+        const allIn = ids.length > 0 && ids.every((id) => prev.includes(id))
+        if (allIn) return prev.filter((id) => !ids.includes(id))
+        return [...new Set([...prev, ...ids])]
+      })
+    },
+    []
+  )
+
+  const bulkApplyStatus = useCallback(async () => {
+    if (!bulkStatus || selected.length === 0 || bulkBusy) return
+    setBulkBusy(true)
+    try {
+      await Promise.all(
+        selected.map((id) =>
+          fetch(`${API}/jobs/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: bulkStatus }),
+          })
+        )
+      )
+      setSelected([])
+      setBulkStatus('')
+      await fetchAll()
+    } catch (e) {
+      console.error('bulk status update failed:', e)
+      await fetchAll()
+    }
+    setBulkBusy(false)
+  }, [bulkStatus, selected, bulkBusy, fetchAll])
+
   const fetchAll = useCallback(async () => {
     try {
       const [jobsRes, statsRes, runRes, resumesRes] = await Promise.all([
@@ -146,6 +188,8 @@ export default function App() {
       setLastRun(r)
       setResumes(res.resumes || [])
       setDefaultResume(res.default || '')
+      // Drop selections for rows that no longer exist.
+      setSelected((prev) => prev.filter((id) => j.some((job) => job.id === id)))
     } catch (e) {
       console.error('dashboard fetch failed:', e)
     } finally {
@@ -264,8 +308,19 @@ export default function App() {
           continue
         }
         if (s.state === 'done') {
+          const reasons = Object.entries(s.filter_reasons || {})
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([k, v]) => `${k}×${v}`)
+            .join(', ')
+          const filt =
+            s.filtered != null && s.filtered > 0
+              ? `, ${s.filtered} auto-filtered${reasons ? ` (${reasons})` : ''}`
+              : ''
           setScrapeNote(
-            s.added != null ? `Scrape finished: +${s.added} new (${s.scraped ?? 0} checked)` : 'Scrape finished.'
+            s.added != null
+              ? `Scrape finished: +${s.added} new (${s.scraped ?? 0} checked${filt})`
+              : 'Scrape finished.'
           )
         } else {
           setScrapeNote(s.error ? `Scrape failed: ${s.error}` : 'Scrape failed.')
@@ -754,6 +809,42 @@ export default function App() {
           </span>
         </section>
 
+        {selected.length > 0 && (
+          <section className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              {selected.length} selected
+            </span>
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-800"
+            >
+              <option value="">Set status…</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={bulkApplyStatus}
+              disabled={!bulkStatus || bulkBusy}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              {bulkBusy ? 'Applying…' : 'Apply to selected'}
+            </button>
+            <button
+              onClick={() => {
+                setSelected([])
+                setBulkStatus('')
+              }}
+              className="rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              Clear
+            </button>
+          </section>
+        )}
+
         <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           {loading ? (
             <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
@@ -767,6 +858,15 @@ export default function App() {
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
+                  <th className="w-10 px-4 py-3 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && filtered.every((job) => selected.includes(job.id))}
+                      onChange={() => toggleSelectAll(filtered)}
+                      title={selected.length ? 'Deselect these rows' : 'Select these rows'}
+                      className="accent-blue-600"
+                    />
+                  </th>
                   <th className="px-4 py-3 font-medium">Title</th>
                   <th className="px-4 py-3 font-medium">Company</th>
                   <th className="px-4 py-3 font-medium">Source</th>
@@ -778,6 +878,15 @@ export default function App() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filtered.map((job) => (
                   <tr key={job.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(job.id)}
+                        onChange={() => toggleSelect(job.id)}
+                        title={`Select "${job.title || 'Untitled'}"`}
+                        className="accent-blue-600"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <a
                         href={job.url}

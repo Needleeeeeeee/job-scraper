@@ -14,6 +14,11 @@ from jobspy import scrape_jobs
 import jobstreet
 from locations import is_metro_manila
 
+# Last run's feedback-filter breakdown, filled by apply_feedback_filter
+# (keys: heuristic_dropped, heuristic_reasons, ai_dropped, ai_provider).
+# Single-user local tool: the pipeline reads this right after scrape().
+last_feedback_report: dict = {}
+
 
 def load_config(path="config.yaml"):
     with open(path) as f:
@@ -253,7 +258,10 @@ def apply_feedback_filter(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     try:
         import feedback
         before = len(df)
-        out = feedback.apply_feedback(df, cfg)
+        report: dict = {}
+        out = feedback.apply_feedback(df, cfg, report=report)
+        global last_feedback_report
+        last_feedback_report = report
         if out is not None and len(out) != before:
             print(f"[scraper] feedback filter: {before} -> {len(out)} jobs")
         return out if out is not None else df

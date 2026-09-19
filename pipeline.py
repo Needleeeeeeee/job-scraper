@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from scraper import load_config, scrape
 
 import db
+import scraper as scraper_mod
 import tracker
 
 
@@ -87,7 +88,7 @@ def _xrow(job) -> dict:
 def run_scrape(legacy_xlsx: bool = False) -> dict:
     """Run one full scrape and return a summary dict.
 
-    Returns {"added": int, "scraped": int, "summary": str}.
+    Returns {"added", "scraped", "summary", "filtered", "filter_reasons"}.
     Raises on fatal errors (DB connection failure, ...); an empty result
     (no jobs found) is NOT an error -- it returns added=0, scraped=0.
     """
@@ -99,9 +100,20 @@ def run_scrape(legacy_xlsx: bool = False) -> dict:
         print(f"[pipeline] WARNING: tracking migration failed: {e}")
     jobs = scrape(cfg)
     print(f"[pipeline] {len(jobs)} jobs after scraping + filters")
+    fb = dict(getattr(scraper_mod, "last_feedback_report", {}) or {})
+    heur_dropped = int(fb.get("heuristic_dropped", 0) or 0)
+    ai_dropped = int(fb.get("ai_dropped", 0) or 0)
+    from collections import Counter
+    top_reasons = dict(Counter(fb.get("heuristic_reasons", []) or []).most_common(5))
+    if ai_dropped and fb.get("ai_provider"):
+        top_reasons[f"ai:{fb['ai_provider']}"] = ai_dropped
+    filtered = heur_dropped + ai_dropped
+    if filtered:
+        print(f"[pipeline] feedback filtered {filtered}: {top_reasons}")
     if jobs.empty:
         print("[pipeline] nothing found -- check config.yaml search terms/location.")
-        return {"added": 0, "scraped": 0, "summary": "no jobs found"}
+        return {"added": 0, "scraped": 0, "summary": "no jobs found",
+                "filtered": filtered, "filter_reasons": top_reasons}
 
     sheet_path = cfg["paths"]["tracker_sheet"]
     df = tracker.load_or_init(sheet_path) if legacy_xlsx else None
@@ -135,4 +147,5 @@ def run_scrape(legacy_xlsx: bool = False) -> dict:
     with open(run_log, "a") as f:
         f.write(summary + "\n")
 
-    return {"added": added, "scraped": len(jobs), "summary": summary}
+    return {"added": added, "scraped": len(jobs), "summary": summary,
+            "filtered": filtered, "filter_reasons": top_reasons}

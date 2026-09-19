@@ -32,6 +32,8 @@ _state: dict = {
     "scraped": None,
     "summary": None,
     "error": None,
+    "filtered": None,
+    "filter_reasons": None,
 }
 
 
@@ -51,6 +53,8 @@ def _worker(legacy_xlsx: bool):
                 "scraped": result.get("scraped"),
                 "summary": result.get("summary"),
                 "error": None,
+                "filtered": result.get("filtered"),
+                "filter_reasons": result.get("filter_reasons"),
             })
     except Exception as e:  # never leave the button stuck on "running"
         with _lock:
@@ -75,6 +79,8 @@ def start_scrape(body: ScrapeRequest | None = None):
             "scraped": None,
             "summary": None,
             "error": None,
+            "filtered": None,
+            "filter_reasons": None,
         })
     t = threading.Thread(target=_worker, args=(legacy_xlsx,), daemon=True)
     t.start()

@@ -645,11 +645,13 @@ def _record_usage_name(fc: dict, usage_name: str, tokens_used: int):
         print(f"[feedback] WARNING: could not record AI usage: {e}")
 
 
-def apply_feedback(df, cfg: dict):
+def apply_feedback(df, cfg: dict, report: dict | None = None):
     """Main entry: filter a freshly-scraped frame using dashboard feedback.
 
     Runs heuristic always, AI when keys allow. Never raises -- on any
-    problem the input frame is returned unchanged.
+    problem the input frame is returned unchanged. When `report` (a dict)
+    is given, it is filled with heuristic_dropped / heuristic_reasons /
+    ai_dropped / ai_provider so callers can show WHY rows were dropped.
     """
     fc = _cfg(cfg)
     if not fc["enabled"] or df is None or getattr(df, "empty", True):
@@ -674,9 +676,14 @@ def apply_feedback(df, cfg: dict):
               f"keywords={patterns['keywords']} phrases={patterns.get('phrases', [])} "
               f"companies={patterns['companies']} "
               f"locations={patterns.get('locations', [])}")
-    df, n_heur, _ = apply_heuristic(df, patterns)
+    df, n_heur, heur_reasons = apply_heuristic(df, patterns)
     if n_heur:
         print(f"[feedback] heuristic dropped {n_heur} postings matching reject patterns.")
+    if report is not None:
+        report["heuristic_dropped"] = n_heur
+        report["heuristic_reasons"] = heur_reasons
+        report["ai_dropped"] = 0
+        report["ai_provider"] = ""
 
     if fc["use_ai"] and fc["ai_provider"] != "off":
         try:
@@ -684,7 +691,10 @@ def apply_feedback(df, cfg: dict):
         except Exception:
             keys = {}
         if keys:
-            df, _, _ = ai_filter(df, decisions, fc, keys)
+            df, n_ai, ai_name = ai_filter(df, decisions, fc, keys)
+            if report is not None:
+                report["ai_dropped"] = n_ai
+                report["ai_provider"] = ai_name
         else:
             print("[feedback] no AI API keys in .env; heuristic-only.")
     return df
