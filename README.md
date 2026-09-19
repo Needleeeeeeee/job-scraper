@@ -142,6 +142,10 @@ feedback learner (see below).
 - **Bulk editing:** tick the checkboxes (header box selects all filtered
   rows) and a bulk bar appears — pick a status once, apply it to the whole
   batch. Useful for triaging a fresh scrape.
+- **Theme:** neutral black/gray chrome in light mode, full dark mode via
+  the sun/moon button in the header (follows your OS preference on first
+  visit, remembered after). Status pills, source badges, and graph lines
+  keep their colors since those encode meaning.
 - **Search** filters live as you type (title/company substring,
   case-insensitive) with a mini syntax: `"exact phrase"` keeps words
   together, `a, b` / `a | b` / `a OR b` match ANY alternative,
