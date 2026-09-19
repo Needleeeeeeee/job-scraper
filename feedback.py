@@ -7,6 +7,10 @@ dashboard, that decision is stored in Postgres (`jobs.status` +
 `job_status_history`). On the next scrape, this module reads those decisions
 back and filters out new postings that look like the ones you rejected.
 
+Statuses outside GOOD/BAD -- NEW (undecided) and EXPIRED (dead link, not
+a relevance judgment) -- are never used for learning, so archiving an
+expired posting as EXPIRED can never teach the filter to ban its title.
+
 Two layers, cheapest first:
 
 1. Heuristic (always on, no API needed): learns from the location field

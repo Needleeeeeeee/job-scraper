@@ -128,8 +128,9 @@ auto-filter, e.g. `+12 new (300 checked, 24 auto-filtered
 feedback learner (see below).
 
 - **Status** badge is a dropdown — set `REVIEWED` / `APPLIED` / `SKIP` /
-  `REJECTED` / `MISMATCH` / `EXP_GAP` directly (`MISMATCH` = wrong role or
-  fit, `EXP_GAP` = needs more experience than you have). Moving to `APPLIED`
+  `REJECTED` / `MISMATCH` / `EXP_GAP` / `EXPIRED` directly (`MISMATCH` = wrong role or
+  fit, `EXP_GAP` = needs more experience than you have, `EXPIRED` = dead
+  link, archived and ignored by the learner). Moving to `APPLIED`
   from it clears `applied_at` so the chart stays accurate. Every change is
   also recorded in `job_status_history` with a timestamp, which powers the
    applied-vs-rejected-vs-skipped-vs-mismatch-vs-expgap graph and the scraper's feedback learner.
@@ -145,7 +146,7 @@ feedback learner (see below).
   company**; prefix it with `title:` to restrict the match to job titles
   only (e.g. `title:python`). Matching text is highlighted in the table.
 - **Negative filter-out tags:** the `✕ SKIP (n)` / `✕ REJECTED (n)` /
-  `✕ MISMATCH (n)` / `✕ EXP_GAP (n)` pills
+  `✕ MISMATCH (n)` / `✕ EXP_GAP (n)` / `✕ EXPIRED (n)` pills
   next to the status dropdown hide those postings from the table (counts
   shown). Picking an explicit status in the dropdown overrides them.
 
